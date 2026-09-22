@@ -295,7 +295,7 @@ default, and the looper screen's hint line says the configured value.
 
 ### Pre-roll
 
-With a **record delay** set in Settings (5s by default), step 1 goes
+With a **record delay** set in Settings (5s by default), the flow goes
 through **Arming** instead: a bar fills as the wait runs out, then
 Recording. It's for the first recording only - once a loop is playing
 you're already in time with it - and a press part-way through calls it

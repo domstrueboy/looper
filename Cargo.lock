@@ -1889,7 +1889,7 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
 name = "looper-app"
-version = "0.1.8"
+version = "0.2.0-dev"
 dependencies = [
  "eframe",
  "egui",
@@ -1901,7 +1901,7 @@ dependencies = [
 
 [[package]]
 name = "looper-core"
-version = "0.1.8"
+version = "0.2.0-dev"
 dependencies = [
  "directories",
  "looper-hal",
@@ -1912,14 +1912,14 @@ dependencies = [
 
 [[package]]
 name = "looper-hal"
-version = "0.1.8"
+version = "0.2.0-dev"
 dependencies = [
  "cpal",
 ]
 
 [[package]]
 name = "looper-ui-egui"
-version = "0.1.8"
+version = "0.2.0-dev"
 dependencies = [
  "egui",
  "looper-core",
