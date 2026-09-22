@@ -320,7 +320,6 @@ Still open:
   `read_mixed_with_overdub`, in one go in `LoopMirror::layer`, with a
   test asserting they agree. Worth folding into one if a third caller
   ever appears.
-- **Per-layer mute** is still unbuilt - see step 2.
 
 ### Load-bearing, despite appearances
 
@@ -387,55 +386,86 @@ tests cover every one.
 
 ## v3: extended build
 
-Not startable as written - it's a list of components, not an order.
-Two things to settle first, at the top of a v3 session:
+Ordered roadmap. Each step is small, testable, and doesn't touch the
+audio device layer until the final integration step.
 
-- **Decide loop / bar-grid sync** (see Open decisions). It gates the
-  metronome *and* the drum machine, and if loops become bar-quantized
-  the saved loop will want its BPM and bar count stored alongside it.
-- **Order the work**, the way v2 was ordered. The dependencies:
-  per-layer mute finishes the track abstraction, which the mic track
-  needs; one scheduler underpins the metronome, which the drum machine
-  is a richer version of. The workspace split is no longer among them -
-  it is done, and the crates it produced are where this work now lands.
+### 0. BPM config field - prerequisite
 
-Still "run and play", not a DAW: preconfigured mic + guitar tracks, a
-few more if wanted, metronome, drum machine, tuner - kept as small and
-single-purpose as the mini looper is today.
+Add `metronome_bpm: u32` to `AppConfig` (range 40-300, default 120).
+This is needed before any timing feature.
 
-- **Track abstraction** - step 2's layer stack, reused rather than
-  reinvented.
-- **The metronome is a one-voice drum machine.** Build one scheduler -
-  (sample position, BPM, pattern) -> events -> voices, pure and
-  testable in the style of the state machine - and the metronome is a
-  preset of it rather than a separate feature with its own timing code.
-- **Drum machine** - one-shot samples plus an editable step pattern,
-  not pre-recorded loops (whose tempo is baked in, so changing BPM would
-  mean resampling). A small fixed-size polyphonic voice pool,
-  pre-allocated to stay RT-safe. Kits load on the UI thread and are
-  handed to the audio thread the way step 5 hands over a restored loop,
-  never loaded in the callback; embed one small CC0 kit via
-  `include_bytes!` to keep the single-exe property, with an optional
-  folder next to the config for more.
-- **Mic channel** - the second input as a track of its own, with
-  independent record-enable, mute and level, once the track abstraction
-  is in place. Nothing stands in the way physically: both iD4 inputs
-  are on the same stream and the input callback already receives every
-  channel interleaved, it just discards all but the chosen one - so no
-  second device to open and no cross-device drift. Two things the
-  single-channel path never had to face: **per-source monitoring**
-  (guitar monitoring is always wanted, live mic monitoring often isn't -
-  feedback, and hearing yourself dry is unpleasant), and **levels that
-  differ enormously** between an instrument input and a mic preamp, so
-  one shared gain isn't enough - eventually an input meter, so it can be
-  set by eye. A cheap interim version (two channels summed to mono into
-  one loop, no track abstraction needed) was considered for v2 and
-  dropped in favour of doing it properly here.
-- **Mini stays mini** - the workspace exists now (`looper-hal`,
-  `looper-core`, `looper-ui-egui`, `looper-app`), so what is left of
-  this is a second thin binary beside `looper-app` assembling a
-  different feature set, so the simple build never carries multitrack
-  code paths it doesn't use.
+### 1. Per-layer mute - finishes track abstraction
+
+A `mute: bool` on `Layer` and a per-layer UI list. The layer stack
+already supports independent layer management; mute is the one piece
+of "record/mute/delete-able" not built. Finishes step 2's debt and
+unblocks the mic channel (per-source monitoring requires per-source
+mute).
+
+### 2. Scheduler core - pure, testable
+
+(sample position, BPM, pattern) -> events -> voices. One scheduler
+that the metronome is a preset of, and the drum machine is a richer
+version of. No audio dependency — driven by sample position, tested
+against a mock clock.
+
+### 3. Metronome click synthesis
+
+A pre-computed short sine/triangle burst, stored via `include_bytes!`.
+No synthesis in the callback, no allocation. Simple: 4/4 time, all
+beats equal, no accents.
+
+### 4. Metronome audio integration
+
+Add `Metronome` struct to `OutputPath`, process clicks into the output
+buffer. Driven by `play_pos` from `SharedControl` — metronome clicks
+on beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
+Clicks during `Arming` state (count-in).
+
+### 5. Loop/bar-grid sync - decision + implementation
+
+Quantize loop length to whole bars when recording stops. Needs the
+clock running *while* recording, pairs naturally with the arming window
+as a count-in. If loops become bar-quantized, the saved loop will want
+its BPM and bar count stored alongside it.
+
+This gates the drum machine: drums against a non-quantized loop will
+clash.
+
+### 6. Drum machine
+
+One-shot samples plus an editable step pattern, not pre-recorded loops
+(whose tempo is baked in, so changing BPM would mean resampling). A
+small fixed-size polyphonic voice pool, pre-allocated to stay RT-safe.
+Kits load on the UI thread and are handed to the audio thread the way
+step 5 hands over a restored loop, never loaded in the callback; embed
+one small CC0 kit via `include_bytes!` to keep the single-exe property,
+with an optional folder next to the config for more.
+
+### 7. Mic channel
+
+The second input as a track of its own, with independent record-enable,
+mute and level, once the track abstraction (step 2) is in place. Nothing
+stands in the way physically: both iD4 inputs are on the same stream and
+the input callback already receives every channel interleaved, it just
+discards all but the chosen one — so no second device to open and no
+cross-device drift. Two things the single-channel path never had to
+face: **per-source monitoring** (guitar monitoring is always wanted,
+live mic monitoring often isn't — feedback, and hearing yourself dry is
+unpleasant), and **levels that differ enormously** between an instrument
+input and a mic preamp, so one shared gain isn't enough — eventually an
+input meter, so it can be set by eye.
+
+### 8. Mini stays mini
+
+The workspace exists now (`looper-hal`, `looper-core`, `looper-ui-egui`,
+`looper-app`), so what is left of this is a second thin binary beside
+`looper-app` assembling a different feature set, so the simple build
+never carries multitrack code paths it doesn't use.
+
+All of the above stays "run and play", not a DAW. The metronome is the
+first step — small, self-contained, and building on `Arming`'s
+existing publish-to-audio-thread pattern.
 
 ## CI / releases
 
