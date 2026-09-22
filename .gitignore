@@ -1,1 +1,14 @@
 /target
+
+# AI agents — plans, scratch, and temp dirs
+plans/
+.claude/
+.cursor/
+.codex/
+.cline/
+.continue/
+.opencode/
+.roo/
+.amp/
+.kiro/
+.gigacode_vsc
