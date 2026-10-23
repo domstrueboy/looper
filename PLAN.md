@@ -38,7 +38,7 @@ bought, concretely:
 - **The looper screen is testable**, on a mock backend, which closed a
   post-v1 item that had stood since the review.
 
-Next is v2, which needs ordering before it can start.
+Next is v2.
 
 ## Ground rules
 
@@ -127,14 +127,6 @@ two equal device ids do not mean one duplex device.
 
 Worth settling before the work they block starts.
 
-- **Loop / bar-grid sync** - blocks both the metronome and the drum
-  machine. A loop recorded today is whatever length happened to be
-  played, so it won't line up with a bar grid and drums against it will
-  clash. Either quantize the loop length to a whole bar when recording
-  stops (needs the clock running *while* recording, and pairs naturally
-  with step 4's arming window as a count-in), or leave the drums
-  free-running and keep time yourself. Recommend quantizing - decided
-  before either feature is built, since both depend on it.
 - ~~**Release-build diagnostics**~~ - **done.** A failed stream shows on
   the looper screen with a button back to Settings, and underruns show
   as a running count naming the setting that fixes them. The console
@@ -149,7 +141,7 @@ Worth settling before the work they block starts.
 
 - Trim loop start/end, and the waveform rendering it needs anyway
 - Undo, distinct from full clear
-- Export / save loops to a chosen file - reuses step 5's WAV writer
+- Export / save loops to a chosen file - reuses v1 step 5's WAV writer
 - NAM model loading, in the insert-effect stage the signal path leaves
   room for between input and the mix
 - Tuner - pitch detection on a decimated copy of the input, analysed on
@@ -205,8 +197,9 @@ against a mock clock.
 
 ### 3. Metronome click synthesis
 
-A pre-computed short sine/triangle burst, stored via `include_bytes!`.
-No synthesis in the callback, no allocation. Simple: 4/4 time, all
+A short sine/triangle burst, generated once when the stream opens, at
+the granted sample rate. No synthesis in the callback, no allocation,
+and no asset file to embed. Simple: 4/4 time, all
 beats equal, no accents.
 
 ### 4. Metronome audio integration
@@ -216,11 +209,13 @@ buffer. Driven by `play_pos` from `SharedControl` — metronome clicks
 on beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
 Clicks during `Arming` state (count-in).
 
-### 5. Loop/bar-grid sync - decision + implementation
+### 5. Loop/bar-grid sync
 
-Quantize loop length to whole bars when recording stops. Needs the
-clock running *while* recording, pairs naturally with the arming window
-as a count-in. If loops become bar-quantized, the saved loop will want
+Quantize loop length to whole bars when recording stops. A loop recorded
+today is whatever length happened to be played; the alternative was
+leaving the drums free-running and keeping time yourself, rejected
+because drums against such a loop drift audibly. Needs the clock running
+*while* recording, pairs naturally with the arming window as a count-in. If loops become bar-quantized, the saved loop will want
 its BPM and bar count stored alongside it.
 
 This gates the drum machine: drums against a non-quantized loop will
@@ -232,7 +227,7 @@ One-shot samples plus an editable step pattern, not pre-recorded loops
 (whose tempo is baked in, so changing BPM would mean resampling). A
 small fixed-size polyphonic voice pool, pre-allocated to stay RT-safe.
 Kits load on the UI thread and are handed to the audio thread the way
-step 5 hands over a restored loop, never loaded in the callback; embed
+v1 step 5 hands over a restored loop, never loaded in the callback; embed
 one small CC0 kit via `include_bytes!` to keep the single-exe property,
 with an optional folder next to the config for more.
 
