@@ -175,12 +175,26 @@ Worth settling before the work they block starts.
 Ordered roadmap. Each step is small, testable, and doesn't touch the
 audio device layer until the final integration step.
 
-### 0. BPM config field - prerequisite
+The app gets two modes on one screen: **mini** is the v1 looper plus
+the metronome, **extended** adds the layer list, drums and mic. One
+binary, switched at runtime - a separate mini build was dropped, since
+a hidden feature costs nothing once its audio path is a skipped flag
+check.
 
-Add `metronome_bpm: u32` to `AppConfig` (range 40-300, default 120).
-This is needed before any timing feature.
+| Mode | Has |
+|---|---|
+| mini | record/loop/overdub, metronome, bar-grid sync |
+| extended | mini + layer list with mute, drum machine, mic channel |
 
-### 1. Per-layer mute - finishes track abstraction
+### 0. Mini/extended switch
+
+A `mode` field in `AppConfig` (default mini) and a button on the looper
+screen to flip it, with an empty extended area for later steps to fill.
+The button is enabled only in `Idle`: with no loop recorded there is
+nothing a switch could change mid-play - a layer muted in extended
+can't silently stay muted in mini, where the mute isn't visible.
+
+### 1. Per-layer mute - extended
 
 A `mute: bool` on `Layer` and a per-layer UI list. The layer stack
 already supports independent layer management; mute is the one piece
@@ -188,40 +202,44 @@ of "record/mute/delete-able" not built. Finishes v1 step 2's debt and
 unblocks the mic channel (per-source monitoring requires per-source
 mute).
 
-### 2. Scheduler core - pure, testable
-
-(sample position, BPM, pattern) -> events -> voices. One scheduler
-that the metronome is a preset of, and the drum machine is a richer
-version of. No audio dependency — driven by sample position, tested
-against a mock clock.
-
-### 3. Metronome click synthesis
+### 2. Metronome click synthesis
 
 A short sine/triangle burst, generated once when the stream opens, at
 the granted sample rate. No synthesis in the callback, no allocation,
-and no asset file to embed. Simple: 4/4 time, all
-beats equal, no accents.
+and no asset file to embed. Independent of everything else in v2; it
+only has to exist before step 4 plays it.
 
-### 4. Metronome audio integration
+### 3. Scheduler core - pure, testable
 
-Add `Metronome` struct to `OutputPath`, process clicks into the output
-buffer. Driven by `play_pos` from `SharedControl` — metronome clicks
-on beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
+(sample position, BPM, pattern) -> events -> voices. One scheduler
+that the metronome is a preset of, and the drum machine is a richer
+version of. No audio dependency - driven by sample position, tested
+against a mock clock. Simple first: 4/4 time, all beats equal, no
+accents.
+
+### 4. Metronome audio integration - mini
+
+Add `metronome_bpm: u32` to `AppConfig` (range 40-300, default 120),
+landing here rather than earlier since this is the first step that
+reads it. Add `Metronome` struct to `OutputPath`, process clicks into
+the output buffer. Driven by `play_pos` from `SharedControl` - clicks on
+beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
 Clicks during `Arming` state (count-in).
 
-### 5. Loop/bar-grid sync
+### 5. Loop/bar-grid sync - mini
 
-Quantize loop length to whole bars when recording stops. A loop recorded
-today is whatever length happened to be played; the alternative was
-leaving the drums free-running and keeping time yourself, rejected
-because drums against such a loop drift audibly. Needs the clock running
-*while* recording, pairs naturally with the arming window as a count-in. If loops become bar-quantized, the saved loop will want
-its BPM and bar count stored alongside it.
+Quantize loop length to whole bars when recording stops, while the
+metronome is on; with it off, a loop stays whatever length was played.
+The alternative was leaving the drums free-running and keeping time
+yourself, rejected because drums against such a loop drift audibly.
+Needs the clock running *while* recording, pairs naturally with the
+arming window as a count-in. If loops become bar-quantized, the saved
+loop will want its BPM and bar count stored alongside it.
 
 This gates the drum machine: drums against a non-quantized loop will
 clash.
 
-### 6. Drum machine
+### 6. Drum machine - extended
 
 One-shot samples plus an editable step pattern, not pre-recorded loops
 (whose tempo is baked in, so changing BPM would mean resampling). A
@@ -231,30 +249,21 @@ v1 step 5 hands over a restored loop, never loaded in the callback; embed
 one small CC0 kit via `include_bytes!` to keep the single-exe property,
 with an optional folder next to the config for more.
 
-### 7. Mic channel
+### 7. Mic channel - extended
 
 The second input as a track of its own, with independent record-enable,
 mute and level, once the track abstraction (v1 step 2) is in place. Nothing
 stands in the way physically: both iD4 inputs are on the same stream and
 the input callback already receives every channel interleaved, it just
-discards all but the chosen one — so no second device to open and no
+discards all but the chosen one - so no second device to open and no
 cross-device drift. Two things the single-channel path never had to
 face: **per-source monitoring** (guitar monitoring is always wanted,
-live mic monitoring often isn't — feedback, and hearing yourself dry is
+live mic monitoring often isn't - feedback, and hearing yourself dry is
 unpleasant), and **levels that differ enormously** between an instrument
-input and a mic preamp, so one shared gain isn't enough — eventually an
+input and a mic preamp, so one shared gain isn't enough - eventually an
 input meter, so it can be set by eye.
 
-### 8. Mini stays mini
-
-The workspace exists now (`looper-hal`, `looper-core`, `looper-ui-egui`,
-`looper-app`), so what is left of this is a second thin binary beside
-`looper-app` assembling a different feature set, so the simple build
-never carries multitrack code paths it doesn't use.
-
-All of the above stays "run and play", not a DAW. The metronome is the
-first step — small, self-contained, and building on `Arming`'s
-existing publish-to-audio-thread pattern.
+All of the above stays "run and play", not a DAW.
 
 ## CI / releases
 
