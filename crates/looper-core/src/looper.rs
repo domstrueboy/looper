@@ -8,7 +8,7 @@ use crate::audio::engine;
 use crate::audio::fault::StreamFault;
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
-use crate::config::{self, AppConfig};
+use crate::config::{self, AppConfig, Mode};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
@@ -34,10 +34,13 @@ pub struct LooperState {
     /// be written to disk - see `LoopMirror`.
     mirror: LoopMirror,
     sample_rate: u32,
-    /// Where the loop is written. Held rather than looked up each time
-    /// so a test can point it somewhere harmless - `config::loop_dir()`
-    /// is the real per-user one.
-    loop_dir: PathBuf,
+    /// The settings this looper was started with. Kept so a change made
+    /// from this screen - the mode - can be saved without losing the rest.
+    config: AppConfig,
+    /// Where the loop and the config are written. Held rather than looked
+    /// up each time so a test can point it somewhere harmless -
+    /// `config::app_dir()` is the real per-user one.
+    dir: PathBuf,
     /// When the current frame was ticked. The readouts below answer from
     /// this rather than asking the clock again, so what a frame shows
     /// can't disagree with the state it was drawn beside.
@@ -57,21 +60,21 @@ impl LooperState {
     /// Opens the device and starts the streams, or returns why it couldn't:
     /// device/rate mismatches are user-recoverable, not bugs.
     pub fn start(backends: &Backends, settings: &AppConfig) -> Result<Self, String> {
-        Self::start_in(backends, settings, config::loop_dir())
+        Self::start_in(backends, settings, config::app_dir())
     }
 
-    /// The same, with the saved loop somewhere other than the per-user
-    /// directory. Split out for the tests, which must not read or write
-    /// the loop of whoever runs them.
+    /// The same, with the saved loop and config somewhere other than the
+    /// per-user directory. Split out for the tests, which must not read or
+    /// write the files of whoever runs them.
     pub fn start_in(
         backends: &Backends,
         settings: &AppConfig,
-        loop_dir: PathBuf,
+        dir: PathBuf,
     ) -> Result<Self, String> {
         let control = Arc::new(SharedControl::new(settings.volume_pct));
         // Whatever was left from last time, if it still fits what's
         // configured now.
-        let restored = loop_mirror::load(&loop_dir, settings);
+        let restored = loop_mirror::load(&config::loop_dir_in(&dir), settings);
         let fault = StreamFault::default();
         let streams = engine::build_looper_streams(
             backends,
@@ -100,7 +103,8 @@ impl LooperState {
             max_layers: settings.max_layers as usize,
             mirror: LoopMirror::new(streams.captured, streams.sample_rate, restored),
             sample_rate: streams.sample_rate,
-            loop_dir,
+            config: settings.clone(),
+            dir,
             now: Instant::now(),
             fault,
             underruns: 0,
@@ -195,6 +199,31 @@ impl LooperState {
         }
     }
 
+    pub fn mode(&self) -> Mode {
+        self.config.mode
+    }
+
+    /// Only with nothing recorded: a switch mid-loop would hide controls
+    /// whose effect is still audible, like a layer muted in extended.
+    pub fn can_switch_mode(&self) -> bool {
+        self.state() == LoopState::Idle
+    }
+
+    /// Flips between mini and extended, and saves it so the app reopens
+    /// the way it was left.
+    pub fn toggle_mode(&mut self) {
+        if !self.can_switch_mode() {
+            return;
+        }
+        self.config.mode = match self.config.mode {
+            Mode::Mini => Mode::Extended,
+            Mode::Extended => Mode::Mini,
+        };
+        if let Err(err) = self.config.save_to(&config::config_path_in(&self.dir)) {
+            eprintln!("could not save the mode: {err}");
+        }
+    }
+
     pub fn set_button_held(&mut self, held: bool) {
         self.button_held = held;
     }
@@ -243,7 +272,7 @@ impl LooperState {
     /// is reported and otherwise ignored: it isn't worth interrupting
     /// playing over.
     fn save_loop(&self) {
-        if let Err(err) = self.mirror.save(&self.loop_dir) {
+        if let Err(err) = self.mirror.save(&config::loop_dir_in(&self.dir)) {
             eprintln!("could not save the loop: {err}");
         }
     }
@@ -275,7 +304,7 @@ impl LooperState {
         self.control.publish_state(self.state_machine.state());
         self.control.request_clear();
         self.mirror.clear();
-        loop_mirror::delete(&self.loop_dir);
+        loop_mirror::delete(&config::loop_dir_in(&self.dir));
     }
 
     /// Drained here rather than in the callbacks, since stdio isn't

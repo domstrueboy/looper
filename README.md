@@ -446,6 +446,12 @@ The last two are a memory multiplier - every layer is pre-allocated at
 the full loop length, so it costs `seconds x layers x sample rate x 4`
 bytes, and the settings screen shows the figure next to the sliders.
 
+`mode` (`"mini"` or `"extended"`, default mini) is the one setting not
+on the Settings screen: it's the Mini / Extended switch in the looper
+screen's top row, saved the moment it's flipped. The switch only works
+in `Idle` - with a loop recorded, flipping it could hide a control whose
+effect is still audible.
+
 Deliberately *not* settings, and living in `looper-hal` because they are
 statements about devices rather than about the app: `MAX_BLOCK_FRAMES`
 (the bound on one callback - what a driver might hand us, not how anyone

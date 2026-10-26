@@ -139,6 +139,16 @@ rather than mangled. Lowering **Max layers** is gentler - the layers that
 still fit come back and the ones on top are dropped, since each layer is
 a take in its own right.
 
+## Mini and extended
+
+The **Mini / Extended** switch at the top of the looper screen picks how
+much the screen shows. **Mini** is the plain pedal. **Extended** will add
+a layer list, a drum machine and a mic channel as they're built - for
+now it only marks where they'll go. The app remembers your choice.
+
+You can only switch with no loop recorded. Clear the loop first
+(hold the button) if the switch is greyed out.
+
 ## Changing settings later
 
 Click the small **⚙** icon (top-right of the looper screen) at any time

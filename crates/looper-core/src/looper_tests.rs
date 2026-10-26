@@ -297,3 +297,33 @@ fn underruns_are_counted_for_the_screen_rather_than_only_logged() {
     assert_eq!(looper.underruns(), after_first, "and don't reset when read");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Mini / extended ----------------------------------------------------
+
+#[test]
+fn switching_mode_flips_it_and_saves_it() {
+    let (mut looper, _driver, dir) = start("looper-mode", &settings());
+    assert_eq!(looper.mode(), Mode::Mini, "the default");
+
+    looper.toggle_mode();
+
+    assert_eq!(looper.mode(), Mode::Extended);
+    let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
+    assert_eq!(saved.mode, Mode::Extended, "the app reopens the way it was left");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_mode_is_locked_once_anything_is_under_way() {
+    // Arming counts: the pre-roll is the start of a recording.
+    let (mut looper, _driver, dir) = start("looper-mode-locked", &settings());
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    assert!(!looper.can_switch_mode());
+    looper.toggle_mode();
+
+    assert_eq!(looper.mode(), Mode::Mini, "unchanged");
+    let _ = std::fs::remove_dir_all(&dir);
+}

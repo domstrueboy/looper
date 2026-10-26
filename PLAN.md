@@ -186,7 +186,7 @@ check.
 | mini | record/loop/overdub, metronome, bar-grid sync |
 | extended | mini + layer list with mute, drum machine, mic channel |
 
-### 0. Mini/extended switch
+### 0. Mini/extended switch - done
 
 A `mode` field in `AppConfig` (default mini) and a button on the looper
 screen to flip it, with an empty extended area for later steps to fill.

@@ -34,6 +34,16 @@ pub const DEFAULT_MAX_LAYERS: u32 = 4;
 pub const LONG_PRESS_MS_RANGE: RangeInclusive<u32> = 500..=4000;
 pub const DEFAULT_LONG_PRESS_MS: u32 = 2000;
 
+/// Which controls the looper screen shows. Mini is the pedal on its own;
+/// extended adds the layer list, the drums and the mic.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Mode {
+    #[default]
+    Mini,
+    Extended,
+}
+
 const CONFIG_DIR: &str = "looper-pedal";
 const CONFIG_FILE: &str = "config.toml";
 const LOOP_DIR: &str = "loop";
@@ -87,6 +97,9 @@ pub struct AppConfig {
     /// See `LONG_PRESS_MS_RANGE`.
     #[serde(default = "default_long_press_ms")]
     pub long_press_ms: u32,
+    /// See `Mode`. Switched from the looper screen, not from Settings.
+    #[serde(default)]
+    pub mode: Mode,
 }
 
 /// What a config written before this field existed meant: those files
@@ -218,8 +231,24 @@ impl Default for AppConfig {
             max_loop_secs: DEFAULT_MAX_LOOP_SECS,
             max_layers: DEFAULT_MAX_LAYERS,
             long_press_ms: DEFAULT_LONG_PRESS_MS,
+            mode: Mode::Mini,
         }
     }
+}
+
+fn config_path() -> PathBuf {
+    config_path_in(&app_dir())
+}
+
+/// The config file inside `dir`. Taking the directory lets a test point
+/// it somewhere harmless; `app_dir()` is the real one.
+pub fn config_path_in(dir: &Path) -> PathBuf {
+    dir.join(CONFIG_FILE)
+}
+
+/// The recorded loop, one WAV per layer, kept beside the config.
+pub fn loop_dir_in(dir: &Path) -> PathBuf {
+    dir.join(LOOP_DIR)
 }
 
 /// The per-user config directory - `%APPDATA%\looper-pedal` on Windows,
@@ -228,16 +257,7 @@ impl Default for AppConfig {
 /// the right place because it isn't writable once the app is installed
 /// somewhere like Program Files; that's only the fallback for having no
 /// home directory at all.
-fn config_path() -> PathBuf {
-    app_dir().join(CONFIG_FILE)
-}
-
-/// The recorded loop, one WAV per layer, kept beside the config.
-pub fn loop_dir() -> PathBuf {
-    app_dir().join(LOOP_DIR)
-}
-
-fn app_dir() -> PathBuf {
+pub fn app_dir() -> PathBuf {
     match directories::BaseDirs::new() {
         Some(dirs) => dirs.config_dir().join(CONFIG_DIR),
         None => exe_dir(),

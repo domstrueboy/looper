@@ -1,4 +1,5 @@
 use looper_core::action::Action;
+use looper_core::config::Mode;
 use looper_core::state_machine::LoopState;
 use looper_core::looper::LooperState;
 use crate::indicator;
@@ -44,6 +45,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     if ui.small_button("⚙").clicked() {
                         action = Some(Action::OpenSettings);
                     }
+                    mode_switch(ui, looper);
                 });
             });
             ui.add_space(8.0);
@@ -156,8 +158,42 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     looper.long_press_secs()
                 ));
                 ui.label("O: overdub   |   R: remove last");
+
+                if looper.mode() == Mode::Extended {
+                    extended_area(ui);
+                }
             });
         });
 
     action
+}
+
+/// Both modes shown side by side, the current one selected, so the
+/// control says where you are as well as where it goes.
+fn mode_switch(ui: &mut egui::Ui, looper: &mut LooperState) {
+    let mode = looper.mode();
+    let clicked = ui
+        .add_enabled_ui(looper.can_switch_mode(), |ui| {
+            let option = |ui: &mut egui::Ui, this: Mode, label: &str| {
+                ui.selectable_label(mode == this, label)
+                    .on_disabled_hover_text("Clear the loop to switch")
+                    .clicked()
+                    && mode != this
+            };
+            // Right-to-left layout: added in reverse reading order.
+            let extended = option(ui, Mode::Extended, "Extended");
+            let mini = option(ui, Mode::Mini, "Mini");
+            extended || mini
+        })
+        .inner;
+    if clicked {
+        looper.toggle_mode();
+    }
+}
+
+/// Where the extended-only controls go as they land: the layer list
+/// first, then drums and the mic.
+fn extended_area(ui: &mut egui::Ui) {
+    ui.separator();
+    ui.weak("Extended controls will appear here");
 }

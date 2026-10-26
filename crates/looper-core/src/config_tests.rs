@@ -13,6 +13,7 @@ fn saved() -> AppConfig {
         max_loop_secs: 90,
         max_layers: 6,
         long_press_ms: 1_500,
+        mode: Mode::Extended,
     }
 }
 
@@ -30,6 +31,7 @@ fn a_round_trip_keeps_every_setting() {
     assert_eq!(read.max_loop_secs, 90);
     assert_eq!(read.max_layers, 6);
     assert_eq!(read.long_press_ms, 1_500);
+    assert_eq!(read.mode, Mode::Extended);
 }
 
 #[test]
@@ -55,6 +57,14 @@ fn settings_added_later_fall_back_to_their_defaults() {
     assert_eq!(config.max_loop_secs, DEFAULT_MAX_LOOP_SECS);
     assert_eq!(config.max_layers, DEFAULT_MAX_LAYERS);
     assert_eq!(config.long_press_ms, DEFAULT_LONG_PRESS_MS);
+    assert_eq!(config.mode, Mode::Mini);
+}
+
+#[test]
+fn the_mode_is_written_as_a_word() {
+    // Hand-editable, like everything else in the file.
+    let text = saved().to_toml().expect("serializes");
+    assert!(text.contains("mode = \"extended\""), "got: {text}");
 }
 
 #[test]
