@@ -220,6 +220,15 @@ impl LoopStack {
         }
     }
 
+    /// Drops the overdub in progress without keeping it - nothing it
+    /// recorded is counted, so its slot is free for the next. The layers
+    /// under it play on.
+    pub fn abandon_overdub(&mut self) {
+        if self.loop_len > 0 {
+            self.recording = None;
+        }
+    }
+
     /// Adds a layer already laid out over the whole loop, as a saved one
     /// is. The first fixes the loop length; the rest have to match it.
     /// For rebuilding a stack off the audio thread - false if it doesn't

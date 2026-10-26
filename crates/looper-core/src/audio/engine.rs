@@ -178,12 +178,14 @@ impl OutputPath {
                     .control
                     .metronome_on()
                     .then(|| self.metronome.bar_frames());
+                let abandon = self.control.take_abandon_take_request();
                 apply_state_change(
                     &mut self.stack,
                     &self.control,
                     self.previous_state,
                     state,
                     bar,
+                    abandon,
                 );
                 if state == LoopState::Arming || (state == LoopState::Recording && !take_open) {
                     self.metronome.restart();
@@ -504,19 +506,22 @@ pub fn build_looper_streams(
 /// recording ends, and opening or closing an overdub layer.
 ///
 /// `bar_frames` is set while the metronome is on: a first take played
-/// against it comes out a whole number of its bars.
+/// against it comes out a whole number of its bars. `abandon` drops an
+/// overdub this change ends, rather than keeping it.
 fn apply_state_change(
     stack: &mut LoopStack,
     control: &SharedControl,
     from: LoopState,
     to: LoopState,
     bar_frames: Option<f64>,
+    abandon: bool,
 ) {
     match from {
         LoopState::Recording => match bar_frames {
             Some(bar) => stack.finish_first_layer_in_bars(bar),
             None => stack.finish_first_layer(),
         },
+        LoopState::Overdubbing if abandon => stack.abandon_overdub(),
         LoopState::Overdubbing => stack.finish_overdub(),
         _ => {}
     }

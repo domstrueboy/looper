@@ -138,3 +138,43 @@ fn can_press_again_after_a_long_press_clear() {
     let t1 = t0 + Duration::from_secs(3);
     assert_eq!(input.update(true, t1), InputEvent::Press);
 }
+
+#[test]
+fn a_second_press_soon_after_is_a_double() {
+    let mut input = handler();
+    let t0 = Instant::now();
+
+    assert_eq!(input.update(true, t0), InputEvent::Press, "acted on at once");
+    input.update(false, t0 + Duration::from_millis(80));
+    assert_eq!(
+        input.update(true, t0 + Duration::from_millis(250)),
+        InputEvent::DoublePress
+    );
+}
+
+#[test]
+fn a_second_press_after_the_window_is_a_single() {
+    let mut input = handler();
+    let t0 = Instant::now();
+
+    input.update(true, t0);
+    input.update(false, t0 + Duration::from_millis(80));
+    assert_eq!(
+        input.update(true, t0 + DOUBLE_PRESS_WINDOW + Duration::from_millis(1)),
+        InputEvent::Press
+    );
+}
+
+#[test]
+fn three_quick_presses_are_a_double_then_a_single() {
+    // Not two doubles sharing the middle press.
+    let mut input = handler();
+    let t0 = Instant::now();
+    let ms = Duration::from_millis;
+
+    assert_eq!(input.update(true, t0), InputEvent::Press);
+    input.update(false, t0 + ms(50));
+    assert_eq!(input.update(true, t0 + ms(150)), InputEvent::DoublePress);
+    input.update(false, t0 + ms(200));
+    assert_eq!(input.update(true, t0 + ms(300)), InputEvent::Press);
+}

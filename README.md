@@ -299,12 +299,23 @@ release. How long that hold is is the `long_press_ms` setting, 2s by
 default, and the looper screen's hint line says the configured value.
 
 With `after_take = "dub"` the main control walks **record -> dub ->
-play**: the press ending the first take publishes `Overdubbing` straight
-from `Recording`, which the audio thread already takes in one go - close
-the take, round it to the bar, open a layer at the top - and the press
-after it finishes the layer rather than stopping. The mirror closes one
-take and opens the next on that transition, since capturing never stops
-in between. Not with `max_layers = 1`: there's no layer to dub into.
+play -> dub -> play**, every dub a new layer, and a **double press**
+stops - the NUX Dual Loop Stereo's footswitch. The press ending the
+first take publishes `Overdubbing` straight from `Recording`, which the
+audio thread already takes in one go - close the take, round it to the
+bar, open a layer at the top. The mirror closes one take and opens the
+next on that transition, since capturing never stops in between. Not
+with `max_layers = 1`: there's no layer to dub into.
+
+A double is two presses within 400 ms (`input.rs`), and since a press
+acts as it goes down, the first half has already happened by the time
+the second arrives. So the double takes it back: a dub the first half
+opened is *abandoned* - `request_abandon_take` is set before the state
+change is published, the audio thread drops the open layer rather than
+counting it, and the mirror drops its copy - so a double never leaves a
+sliver of a layer. Three quick presses are a double and a single, not
+two doubles. Outside the dub cycle a single press already stops, so a
+double is just two presses.
 
 A **press** acts the moment the control goes down, not when it's let
 go. Waiting for the release, to be sure a press wasn't the start of a

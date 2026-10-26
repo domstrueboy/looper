@@ -176,6 +176,12 @@ impl LoopMirror {
         out_of_date
     }
 
+    /// The take in progress is being thrown away: what it captured is
+    /// dropped, and so is whatever of it is still on the way.
+    pub fn abandon_take(&mut self) {
+        self.open_take = None;
+    }
+
     pub fn remove_last_layer(&mut self) {
         if let Some(take) = self.finished.pop() {
             self.removed.push(take);

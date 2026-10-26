@@ -501,7 +501,8 @@ impl LooperState {
             && self.control.loop_len() >= target
         {
             self.stop_at = None;
-            self.stop_recording();
+            self.end_take(self.dub_cycle());
+            self.control.publish_state(self.state_machine.state());
         }
 
         if let Some(source) = self.tempo_pending
@@ -571,42 +572,79 @@ impl LooperState {
     /// that pairing can't be forgotten at a call site.
     fn apply(&mut self, event: InputEvent, now: Instant) {
         match event {
-            InputEvent::Press => {
-                // A second press while waiting for the bar line means
-                // now: the take is still rounded, the rest plays silent.
-                if self.state() == LoopState::Recording && self.stop_at.is_none() {
-                    self.stop_at = self.bar_line_ahead();
-                    if self.stop_at.is_some() {
-                        return;
-                    }
-                }
-                self.stop_at = None;
-                // A pre-roll is only for the first recording - once a
-                // loop is playing you're already in time with it. With
-                // the metronome on it's a bar's count-in instead of the
-                // configured delay.
-                if self.state() == LoopState::Idle && self.metronome_on {
-                    self.state_machine.arm();
-                    self.count_in = Some(now);
-                } else if self.state() == LoopState::Idle && self.preroll.is_enabled() {
-                    self.state_machine.arm();
-                    self.preroll.start(now);
-                } else if self.state() == LoopState::Recording {
-                    self.stop_recording();
-                } else if self.state() == LoopState::Overdubbing && self.dubs_after_take() {
-                    // Record, dub, play: the press after the dub finishes
-                    // the layer and keeps the loop going.
-                    self.state_machine.toggle_overdub();
-                } else {
-                    self.state_machine.press();
-                    self.preroll.cancel();
-                    self.count_in = None;
-                }
-                self.control.publish_state(self.state_machine.state());
-            }
+            InputEvent::Press => self.press(now),
+            InputEvent::DoublePress if self.dub_cycle() => self.double_press(now),
+            // Outside the dub cycle the single press already stops, so a
+            // double is just two presses.
+            InputEvent::DoublePress => self.press(now),
             InputEvent::LongPressClear => self.clear(),
             InputEvent::None => {}
         }
+    }
+
+    fn press(&mut self, now: Instant) {
+        // A second press while waiting for the bar line means now: the
+        // take is still rounded, the rest plays silent.
+        if self.state() == LoopState::Recording && self.stop_at.is_none() {
+            self.stop_at = self.bar_line_ahead();
+            if self.stop_at.is_some() {
+                return;
+            }
+        }
+        self.stop_at = None;
+        // A pre-roll is only for the first recording - once a loop is
+        // playing you're already in time with it. With the metronome on
+        // it's a bar's count-in instead of the configured delay.
+        if self.state() == LoopState::Idle && self.metronome_on {
+            self.state_machine.arm();
+            self.count_in = Some(now);
+        } else if self.state() == LoopState::Idle && self.preroll.is_enabled() {
+            self.state_machine.arm();
+            self.preroll.start(now);
+        } else if self.state() == LoopState::Recording {
+            self.end_take(self.dub_cycle());
+        } else if self.dub_cycle()
+            && (self.state() == LoopState::Overdubbing || self.can_overdub())
+        {
+            // Record, dub, play, dub, play: every dub a layer of its own.
+            // With every layer used, a press does nothing - a double press
+            // is what stops.
+            self.state_machine.toggle_overdub();
+        } else if !(self.dub_cycle() && self.state() == LoopState::Looping) {
+            self.state_machine.press();
+            self.preroll.cancel();
+            self.count_in = None;
+        }
+        self.control.publish_state(self.state_machine.state());
+    }
+
+    /// Stop, in the dub cycle - where the single press no longer does.
+    /// Its first half already acted as it went down, so whatever that
+    /// started is taken back first: a dub it opened a moment ago is
+    /// dropped rather than left as a sliver of a layer.
+    fn double_press(&mut self, now: Instant) {
+        match self.state() {
+            LoopState::Overdubbing => {
+                self.control.request_abandon_take();
+                self.mirror.abandon_take();
+                self.state_machine.toggle_overdub();
+                self.state_machine.press();
+            }
+            LoopState::Looping => self.state_machine.press(),
+            // A take still waiting for its bar line: end it now, and stop
+            // rather than dub.
+            LoopState::Recording if self.stop_at.is_some() => {
+                self.stop_at = None;
+                self.end_take(false);
+                self.state_machine.press();
+            }
+            // Otherwise the first half is what started this recording, a
+            // moment ago, from nothing: a double tap on an empty looper
+            // leaves it empty.
+            LoopState::Recording => return self.clear(),
+            _ => return self.press(now),
+        }
+        self.control.publish_state(self.state_machine.state());
     }
 
     /// Where a take stopped now would be rounded up to, if the metronome
@@ -626,10 +664,10 @@ impl LooperState {
 
     /// Ends a first take, noting what its tempo will come from: the
     /// length isn't fixed until the audio thread has handled the stop.
-    /// Goes straight into an overdub when that's what's configured - one
-    /// state change, which the audio thread takes as "close the take,
-    /// fix the length, open a layer at the top".
-    fn stop_recording(&mut self) {
+    /// `into_dub` goes straight on into an overdub - one state change,
+    /// which the audio thread takes as "close the take, fix the length,
+    /// open a layer at the top". The caller publishes.
+    fn end_take(&mut self, into_dub: bool) {
         self.tempo_pending = Some(if self.metronome_on {
             TempoSource::Click(self.bar_frames())
         } else {
@@ -637,14 +675,15 @@ impl LooperState {
         });
         self.loop_tempo = None;
         self.state_machine.press();
-        if self.dubs_after_take() {
+        if into_dub {
             self.state_machine.toggle_overdub();
         }
-        self.control.publish_state(self.state_machine.state());
     }
 
-    /// Record, dub, play - unless there's no second layer to dub into.
-    fn dubs_after_take(&self) -> bool {
+    /// Whether the main control walks record, dub, play, dub, play -
+    /// with a double press to stop - rather than record, play, stop.
+    /// Not with one layer allowed: there'd be nothing to dub into.
+    pub fn dub_cycle(&self) -> bool {
         self.config.after_take == AfterTake::Dub && self.max_layers > 1
     }
 

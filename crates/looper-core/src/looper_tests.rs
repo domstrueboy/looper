@@ -920,25 +920,145 @@ fn dub_after_take(max_layers: u32) -> AppConfig {
     }
 }
 
+/// Two presses close enough together to make a double.
+fn double_press(looper: &mut LooperState, at: Instant) {
+    looper.tick(true, at);
+    looper.tick(false, at + Duration::from_millis(50));
+    looper.tick(true, at + Duration::from_millis(150));
+    looper.tick(false, at + Duration::from_millis(200));
+}
+
+/// Single presses, far enough apart never to make a double.
+fn single(looper: &mut LooperState, at: &mut Instant) {
+    *at += Duration::from_secs(1);
+    press(looper, *at, *at);
+}
+
 #[test]
-fn with_dub_after_take_the_press_cycle_is_record_dub_play() {
-    let (mut looper, driver, dir) = start("looper-dub-after", &dub_after_take(4));
-    let at = Instant::now();
-    press(&mut looper, at, at);
+fn the_dub_cycle_is_record_dub_play_dub_play() {
+    let (mut looper, driver, dir) = start("looper-dub-cycle", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
     feed(&mut looper, &driver, 8_000, at);
 
-    press(&mut looper, at, at);
+    single(&mut looper, &mut at);
     assert_eq!(looper.state(), LoopState::Overdubbing, "straight into the second part");
     feed(&mut looper, &driver, 4_000, at);
-
-    press(&mut looper, at, at);
+    single(&mut looper, &mut at);
     assert_eq!(looper.state(), LoopState::Looping, "the layer kept, the loop going");
-    driver.cycle(&vec![0.0; 512]);
-    looper.tick(false, at);
-    assert_eq!(looper.layer_count(), 2);
+    feed(&mut looper, &driver, 512, at);
 
-    press(&mut looper, at, at);
-    assert_eq!(looper.state(), LoopState::Stopped, "and stop, as ever");
+    single(&mut looper, &mut at);
+    assert_eq!(looper.state(), LoopState::Overdubbing, "and the next dub");
+    feed(&mut looper, &driver, 4_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!(looper.layer_count(), 3, "every dub a layer of its own");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn in_the_dub_cycle_a_double_press_stops() {
+    let (mut looper, driver, dir) = start("looper-dub-double", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!((looper.state(), looper.layer_count()), (LoopState::Looping, 2));
+
+    // From playing: the first half opens a dub, the second takes it back.
+    at += Duration::from_secs(1);
+    double_press(&mut looper, at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 2, "no sliver of a third layer");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_double_press_while_dubbing_stops_and_keeps_the_layer() {
+    let (mut looper, driver, dir) = start("looper-dub-double-keep", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+
+    // The first half finishes the dub, the second stops.
+    at += Duration::from_secs(1);
+    double_press(&mut looper, at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_double_press_ending_the_take_stops_rather_than_dubs() {
+    let (mut looper, driver, dir) = start("looper-dub-double-take", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+
+    at += Duration::from_secs(1);
+    double_press(&mut looper, at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 1, "the take, and no dub");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_double_tap_on_an_empty_looper_leaves_it_empty() {
+    let (mut looper, driver, dir) = start("looper-dub-double-empty", &dub_after_take(4));
+    let at = Instant::now();
+    double_press(&mut looper, at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Idle);
+    assert_eq!(looper.loop_duration_and_progress().0, 0.0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn with_every_layer_used_a_single_press_does_nothing() {
+    let (mut looper, driver, dir) = start("looper-dub-full", &dub_after_take(2));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!(looper.layer_count(), 2, "both used");
+
+    single(&mut looper, &mut at);
+    assert_eq!(looper.state(), LoopState::Looping, "still playing - the double is what stops");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn outside_the_dub_cycle_a_double_is_just_two_presses() {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start("looper-double-plain", &no_preroll);
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    assert_eq!(looper.state(), LoopState::Looping);
+
+    at += Duration::from_secs(1);
+    double_press(&mut looper, at);
+    assert_eq!(looper.state(), LoopState::Looping, "stop, then play again");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -957,12 +1077,12 @@ fn with_one_layer_allowed_there_is_nothing_to_dub_into() {
 #[test]
 fn a_dub_after_the_take_is_saved_as_a_layer_of_its_own() {
     let (mut looper, driver, dir) = start("looper-dub-after-saved", &dub_after_take(4));
-    let at = Instant::now();
-    press(&mut looper, at, at);
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
     feed(&mut looper, &driver, 8_000, at);
-    press(&mut looper, at, at);
+    single(&mut looper, &mut at);
     feed(&mut looper, &driver, 4_000, at);
-    press(&mut looper, at, at);
+    single(&mut looper, &mut at);
     driver.cycle(&vec![0.0; 512]);
     looper.tick(false, at);
     looper.tick(false, at);
@@ -985,5 +1105,35 @@ fn by_default_the_take_plays_rather_than_dubs() {
     feed(&mut looper, &driver, 8_000, at);
     press(&mut looper, at, at);
     assert_eq!(looper.state(), LoopState::Looping);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_dub_the_first_tap_had_already_recorded_into_is_thrown_away() {
+    // Audio runs between the taps, so the dub is open and has samples on
+    // the audio thread - and on their way to the saved copy.
+    let (mut looper, driver, dir) = start("looper-dub-double-abandon", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+
+    at += Duration::from_secs(1);
+    looper.tick(true, at);
+    driver.cycle(&vec![0.5; 2_048]);
+    looper.tick(false, at + Duration::from_millis(50));
+    looper.tick(true, at + Duration::from_millis(150));
+    looper.tick(false, at + Duration::from_millis(200));
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 2, "dropped on the audio thread");
+    assert!(
+        !config::loop_dir_in(&dir).join("layer-3.wav").exists(),
+        "and never saved"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }

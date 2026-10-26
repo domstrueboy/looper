@@ -124,9 +124,21 @@ A few things worth knowing:
   overdubbing stops playback, exactly as it does while looping. The
   layer you were recording is kept.
 - To put the second part down without waiting a pass, set **After
-  recording** to **Overdub** in Settings. Then the press that ends your
-  first recording goes straight into an overdub, the next press keeps
-  that layer and plays on, and the one after stops: record, dub, play.
+  recording** to **Overdub** in Settings. Then the main control works
+  like the NUX Dual Loop Stereo's footswitch:
+
+  | Press | Does |
+  |---|---|
+  | Once, while recording | ends the take and goes straight into an overdub |
+  | Once, while overdubbing | keeps that layer and plays on |
+  | Once, while playing | starts the next overdub - every one a layer of its own |
+  | **Twice quickly** | **stops** |
+
+  A quick double press never leaves a tiny layer behind: if the first
+  press had just started an overdub, the second throws it away. On an
+  empty looper, a double press leaves it empty. With every layer used, a
+  single press does nothing - double-press to stop. The hint lines under
+  the buttons show which way Space is working.
 - Every layer plays at the level you recorded it, so play each one at
   the volume you want it in the mix. If the stack ends up too loud
   overall, turn **Loop volume** down in Settings - it covers the whole

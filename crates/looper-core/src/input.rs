@@ -13,13 +13,25 @@ use std::time::{Duration, Instant};
 pub enum InputEvent {
     None,
     Press,
+    /// A second press within `DOUBLE_PRESS_WINDOW` of the first. The first
+    /// has already been acted on by then - it fired as it went down - so
+    /// whoever acts on this one decides what of the first to take back.
+    DoublePress,
     LongPressClear,
 }
+
+/// How soon a second press has to follow the first to count as a double:
+/// quick enough that two deliberate single presses don't run together.
+pub const DOUBLE_PRESS_WINDOW: Duration = Duration::from_millis(400);
 
 pub struct InputHandler {
     long_press_threshold: Duration,
     pressed_at: Option<Instant>,
     long_press_fired: bool,
+    /// The last single press, while a second could still make it a
+    /// double. Cleared by a double, so three quick presses are a double
+    /// and a single rather than two doubles.
+    last_press: Option<Instant>,
 }
 
 impl InputHandler {
@@ -28,6 +40,7 @@ impl InputHandler {
             long_press_threshold,
             pressed_at: None,
             long_press_fired: false,
+            last_press: None,
         }
     }
 
@@ -50,7 +63,15 @@ impl InputHandler {
                 None => {
                     self.pressed_at = Some(now);
                     self.long_press_fired = false;
-                    InputEvent::Press
+                    match self.last_press.take() {
+                        Some(last) if now.duration_since(last) <= DOUBLE_PRESS_WINDOW => {
+                            InputEvent::DoublePress
+                        }
+                        _ => {
+                            self.last_press = Some(now);
+                            InputEvent::Press
+                        }
+                    }
                 }
                 Some(pressed_at) => {
                     if !self.long_press_fired

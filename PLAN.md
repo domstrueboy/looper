@@ -310,8 +310,9 @@ How the main control behaves, as settings rather than one fixed way.
   the UI thread's copy could save a take at its played length rather
   than its rounded one, now fixed.
 - **7b. Dub mode - done.** "After recording: Play / Overdub" in
-  Settings: with Overdub, the press ending the first take goes straight
-  into an overdub, and the next one keeps the layer and plays on.
+  Settings. With Overdub the main control is the NUX's footswitch:
+  record, dub, play, dub, play - every dub a layer - and a double press
+  stops, taking back a dub its first half had just opened.
 - **7c. Record start mode.** One setting: *Instant*, *Delay* (today's
   Record delay), *Count-in* (today's, one bar) or *Detect* - recording
   opens when the input crosses a level, so you don't have to press and

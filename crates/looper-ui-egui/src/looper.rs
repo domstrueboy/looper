@@ -186,11 +186,21 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // Kept to three short lines: one long one would wrap
                 // raggedly at this window width.
                 ui.add_space(4.0);
-                ui.label("Space or button: record / loop / stop");
-                ui.label(format!(
-                    "Hold either {:.1}s to clear",
-                    looper.long_press_secs()
-                ));
+                // Says which cycle the main control is on: the dub cycle
+                // changes what a single press does, and adds the double.
+                if looper.dub_cycle() {
+                    ui.label("Space or button: record / dub / play");
+                    ui.label(format!(
+                        "Double-tap to stop  |  hold {:.1}s to clear",
+                        looper.long_press_secs()
+                    ));
+                } else {
+                    ui.label("Space or button: record / loop / stop");
+                    ui.label(format!(
+                        "Hold either {:.1}s to clear",
+                        looper.long_press_secs()
+                    ));
+                }
                 ui.label("O: overdub  |  R: remove  |  Y: redo");
                 ui.label("M: metronome  |  , and . : tempo");
 
