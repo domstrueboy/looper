@@ -140,8 +140,16 @@ Worth settling before the work they block starts.
 ## Later (unordered)
 
 - Trim loop start/end, and the waveform rendering it needs anyway
-- Undo, distinct from full clear
-- Export / save loops to a chosen file - reuses v1 step 5's WAV writer
+- Export / save loops to a chosen file - reuses v1 step 5's WAV writer.
+  Could grow into numbered memory slots, several saved loops to pick
+  from, as on the NUX Dual Loop Stereo.
+- **A/B song parts** (extended) - two loops, switched between for verse
+  and chorus, as on the NUX Dual Loop Stereo. Each part would want its
+  own layer stack, so memory doubles; worth doing after the mic channel
+  has shown what a second track costs.
+- **Auto-record** (mini) - recording starts when the input crosses a
+  level, instead of after the pre-roll timer. An alternative start for
+  the same `Arming` state.
 - NAM model loading, in the insert-effect stage the signal path leaves
   room for between input and the mix
 - Tuner - pitch detection on a decimated copy of the input, analysed on
@@ -183,7 +191,7 @@ check.
 
 | Mode | Has |
 |---|---|
-| mini | record/loop/overdub, metronome, bar-grid sync |
+| mini | record/loop/overdub/redo, metronome, bar-grid sync |
 | extended | mini + layer list with mute, drum machine, mic channel |
 
 ### 0. Mini/extended switch - done
@@ -202,14 +210,23 @@ of "record/mute/delete-able" not built. Finishes v1 step 2's debt and
 unblocks the mic channel (per-source monitoring requires per-source
 mute).
 
-### 2. Metronome click synthesis
+### 2. Redo - mini
+
+Brings back the layer "remove last" dropped. Close to free: removing
+only lowers the layer count, so the audio stays in the buffer until the
+next take overwrites it. Available from a remove until a new layer is
+recorded or the loop is cleared, then gone - which needs the mirror to
+keep the removed layer's copy for the same window, so a redone layer is
+saved again. Not across restarts.
+
+### 3. Metronome click synthesis
 
 A short sine/triangle burst, generated once when the stream opens, at
 the granted sample rate. No synthesis in the callback, no allocation,
 and no asset file to embed. Independent of everything else in v2; it
-only has to exist before step 4 plays it.
+only has to exist before step 5 plays it.
 
-### 3. Scheduler core - pure, testable
+### 4. Scheduler core - pure, testable
 
 (sample position, BPM, pattern) -> events -> voices. One scheduler
 that the metronome is a preset of, and the drum machine is a richer
@@ -217,7 +234,7 @@ version of. No audio dependency - driven by sample position, tested
 against a mock clock. Simple first: 4/4 time, all beats equal, no
 accents.
 
-### 4. Metronome audio integration - mini
+### 5. Metronome audio integration - mini
 
 Add `metronome_bpm: u32` to `AppConfig` (range 40-300, default 120),
 landing here rather than earlier since this is the first step that
@@ -226,20 +243,28 @@ the output buffer. Driven by `play_pos` from `SharedControl` - clicks on
 beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
 Clicks during `Arming` state (count-in).
 
-### 5. Loop/bar-grid sync - mini
+### 6. Loop/bar-grid sync - mini
 
-Quantize loop length to whole bars when recording stops, while the
-metronome is on; with it off, a loop stays whatever length was played.
-The alternative was leaving the drums free-running and keeping time
-yourself, rejected because drums against such a loop drift audibly.
-Needs the clock running *while* recording, pairs naturally with the
-arming window as a count-in. If loops become bar-quantized, the saved
-loop will want its BPM and bar count stored alongside it.
+Two ways to get a loop that fits a bar grid, picked by whether the
+metronome is on:
 
-This gates the drum machine: drums against a non-quantized loop will
+- **Metronome on: round the loop.** Quantize loop length to whole bars
+  when recording stops. Needs the clock running *while* recording,
+  pairs naturally with the arming window as a count-in.
+- **Metronome off: derive the tempo.** The loop stays whatever length
+  was played, and the BPM is worked out from it - the number of 4/4
+  bars that puts the tempo nearest a playable range (roughly 70-140),
+  with halve/double to correct a wrong guess. Taken from the NUX Dual
+  Loop Stereo, whose drummer follows the loop rather than the reverse.
+
+The rejected alternative was leaving the drums free-running and keeping
+time yourself: drums against such a loop drift audibly. Either way the
+saved loop will want its BPM and bar count stored alongside it.
+
+This gates the drum machine: drums against a loop with no tempo will
 clash.
 
-### 6. Drum machine - extended
+### 7. Drum machine - extended
 
 One-shot samples plus an editable step pattern, not pre-recorded loops
 (whose tempo is baked in, so changing BPM would mean resampling). A
@@ -249,7 +274,7 @@ v1 step 5 hands over a restored loop, never loaded in the callback; embed
 one small CC0 kit via `include_bytes!` to keep the single-exe property,
 with an optional folder next to the config for more.
 
-### 7. Mic channel - extended
+### 8. Mic channel - extended
 
 The second input as a track of its own, with independent record-enable,
 mute and level, once the track abstraction (v1 step 2) is in place. Nothing
