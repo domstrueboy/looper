@@ -541,3 +541,19 @@ fn a_tempo_file_that_does_not_read_is_no_tempo() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn recording_straight_into_a_dub_makes_two_takes() {
+    // Capturing never stops between them, but they are two layers.
+    let (mut input, mut mirror) = new_mirror();
+    mirror.tick(LoopState::Recording, 0, 0);
+    input.push_slice(&s(&[1, 2]));
+    mirror.tick(LoopState::Recording, 0, 0);
+    mirror.tick(LoopState::Overdubbing, 0, 0);
+    input.push_slice(&s(&[3, 4]));
+    mirror.tick(LoopState::Overdubbing, 2, 0);
+    mirror.tick(LoopState::Looping, 2, 0);
+    mirror.tick(LoopState::Looping, 2, 0);
+
+    assert_eq!(mirror.layers(), vec![s(&[1, 2]), s(&[3, 4])]);
+}

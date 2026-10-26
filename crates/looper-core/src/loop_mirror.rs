@@ -139,7 +139,10 @@ impl LoopMirror {
             self.loop_len = 0;
             self.lost_samples = false;
         }
-        if was_capturing && !capturing {
+        // Recording straight into an overdub is a take ending and another
+        // beginning, though capturing never stops in between.
+        let dubbed_on = self.previous_state == LoopState::Recording && state == LoopState::Overdubbing;
+        if was_capturing && (!capturing || dubbed_on) {
             let take = self.open_take.take().unwrap_or_default();
             if self.previous_state == LoopState::Arming {
                 // A pre-roll called off: whatever its count-in opened
@@ -164,6 +167,9 @@ impl LoopMirror {
                 // now - left alone it would come back at the next launch.
                 out_of_date = true;
             }
+        }
+        if dubbed_on {
+            self.open_take = Some(Vec::new());
         }
 
         self.previous_state = state;

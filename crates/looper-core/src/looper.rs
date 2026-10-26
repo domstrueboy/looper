@@ -10,7 +10,7 @@ use crate::audio::fault::StreamFault;
 use crate::audio::scheduler::{Pattern, Scheduler};
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
-use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode};
+use crate::config::{self, AfterTake, AppConfig, METRONOME_BPM_RANGE, Mode};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
@@ -593,6 +593,10 @@ impl LooperState {
                     self.preroll.start(now);
                 } else if self.state() == LoopState::Recording {
                     self.stop_recording();
+                } else if self.state() == LoopState::Overdubbing && self.dubs_after_take() {
+                    // Record, dub, play: the press after the dub finishes
+                    // the layer and keeps the loop going.
+                    self.state_machine.toggle_overdub();
                 } else {
                     self.state_machine.press();
                     self.preroll.cancel();
@@ -622,6 +626,9 @@ impl LooperState {
 
     /// Ends a first take, noting what its tempo will come from: the
     /// length isn't fixed until the audio thread has handled the stop.
+    /// Goes straight into an overdub when that's what's configured - one
+    /// state change, which the audio thread takes as "close the take,
+    /// fix the length, open a layer at the top".
     fn stop_recording(&mut self) {
         self.tempo_pending = Some(if self.metronome_on {
             TempoSource::Click(self.bar_frames())
@@ -630,7 +637,15 @@ impl LooperState {
         });
         self.loop_tempo = None;
         self.state_machine.press();
+        if self.dubs_after_take() {
+            self.state_machine.toggle_overdub();
+        }
         self.control.publish_state(self.state_machine.state());
+    }
+
+    /// Record, dub, play - unless there's no second layer to dub into.
+    fn dubs_after_take(&self) -> bool {
+        self.config.after_take == AfterTake::Dub && self.max_layers > 1
     }
 
     fn clear(&mut self) {

@@ -123,6 +123,10 @@ A few things worth knowing:
 - Pressing the main control (space or the round button) while
   overdubbing stops playback, exactly as it does while looping. The
   layer you were recording is kept.
+- To put the second part down without waiting a pass, set **After
+  recording** to **Overdub** in Settings. Then the press that ends your
+  first recording goes straight into an overdub, the next press keeps
+  that layer and plays on, and the one after stops: record, dub, play.
 - Every layer plays at the level you recorded it, so play each one at
   the volume you want it in the mix. If the stack ends up too loud
   overall, turn **Loop volume** down in Settings - it covers the whole

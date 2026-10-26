@@ -49,6 +49,17 @@ pub enum Mode {
 pub const METRONOME_BPM_RANGE: RangeInclusive<u32> = 40..=300;
 pub const DEFAULT_METRONOME_BPM: u32 = 120;
 
+/// What the main control does when it ends the first take: start the
+/// loop playing, or go straight on into an overdub - for putting down the
+/// second part without waiting a pass for it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AfterTake {
+    #[default]
+    Play,
+    Dub,
+}
+
 const CONFIG_DIR: &str = "looper-pedal";
 const CONFIG_FILE: &str = "config.toml";
 const LOOP_DIR: &str = "loop";
@@ -105,6 +116,9 @@ pub struct AppConfig {
     /// See `METRONOME_BPM_RANGE`.
     #[serde(default = "default_metronome_bpm")]
     pub metronome_bpm: u32,
+    /// See `AfterTake`.
+    #[serde(default)]
+    pub after_take: AfterTake,
     /// See `Mode`. Switched from the looper screen, not from Settings.
     #[serde(default)]
     pub mode: Mode,
@@ -245,6 +259,7 @@ impl Default for AppConfig {
             max_layers: DEFAULT_MAX_LAYERS,
             long_press_ms: DEFAULT_LONG_PRESS_MS,
             metronome_bpm: DEFAULT_METRONOME_BPM,
+            after_take: AfterTake::Play,
             mode: Mode::Mini,
         }
     }

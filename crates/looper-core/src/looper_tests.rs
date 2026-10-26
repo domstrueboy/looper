@@ -908,3 +908,82 @@ fn reopen(dir: &std::path::Path) -> LooperState {
     looper.tick(false, Instant::now());
     looper
 }
+
+// --- After the take -----------------------------------------------------------
+
+fn dub_after_take(max_layers: u32) -> AppConfig {
+    AppConfig {
+        preroll_ms: 0,
+        after_take: config::AfterTake::Dub,
+        max_layers,
+        ..settings()
+    }
+}
+
+#[test]
+fn with_dub_after_take_the_press_cycle_is_record_dub_play() {
+    let (mut looper, driver, dir) = start("looper-dub-after", &dub_after_take(4));
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, 8_000, at);
+
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Overdubbing, "straight into the second part");
+    feed(&mut looper, &driver, 4_000, at);
+
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Looping, "the layer kept, the loop going");
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.layer_count(), 2);
+
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Stopped, "and stop, as ever");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn with_one_layer_allowed_there_is_nothing_to_dub_into() {
+    let (mut looper, driver, dir) = start("looper-dub-after-one", &dub_after_take(1));
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, 8_000, at);
+
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Looping);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_dub_after_the_take_is_saved_as_a_layer_of_its_own() {
+    let (mut looper, driver, dir) = start("looper-dub-after-saved", &dub_after_take(4));
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, 8_000, at);
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, 4_000, at);
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    looper.tick(false, at);
+
+    let loop_dir = config::loop_dir_in(&dir);
+    assert!(loop_dir.join("layer-1.wav").exists());
+    assert!(loop_dir.join("layer-2.wav").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn by_default_the_take_plays_rather_than_dubs() {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start("looper-dub-default", &no_preroll);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, 8_000, at);
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Looping);
+    let _ = std::fs::remove_dir_all(&dir);
+}

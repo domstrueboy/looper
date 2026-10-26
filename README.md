@@ -298,6 +298,14 @@ fires the moment the hold crosses the threshold while still held, not on
 release. How long that hold is is the `long_press_ms` setting, 2s by
 default, and the looper screen's hint line says the configured value.
 
+With `after_take = "dub"` the main control walks **record -> dub ->
+play**: the press ending the first take publishes `Overdubbing` straight
+from `Recording`, which the audio thread already takes in one go - close
+the take, round it to the bar, open a layer at the top - and the press
+after it finishes the layer rather than stopping. The mirror closes one
+take and opens the next on that transition, since capturing never stops
+in between. Not with `max_layers = 1`: there's no layer to dub into.
+
 A **press** acts the moment the control goes down, not when it's let
 go. Waiting for the release, to be sure a press wasn't the start of a
 hold, made every take start and stop as late as the key stayed down -
@@ -539,6 +547,7 @@ window opened.
 | `preroll_ms` | 5000 | 0-5000 | wait before recording starts; 0 = off |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold clears the loop |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
+| `after_take` | `"play"` | `"play"`, `"dub"` | what the press ending the first take does next |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |
 | `max_loop_secs` | 60 | 10-120 | longest recordable loop |
 | `max_layers` | 4 | 1-8 | layers including the first recording |

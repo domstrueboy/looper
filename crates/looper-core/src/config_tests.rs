@@ -14,6 +14,7 @@ fn saved() -> AppConfig {
         max_layers: 6,
         long_press_ms: 1_500,
         metronome_bpm: 92,
+        after_take: AfterTake::Dub,
         mode: Mode::Extended,
     }
 }
@@ -33,6 +34,7 @@ fn a_round_trip_keeps_every_setting() {
     assert_eq!(read.max_layers, 6);
     assert_eq!(read.long_press_ms, 1_500);
     assert_eq!(read.metronome_bpm, 92);
+    assert_eq!(read.after_take, AfterTake::Dub);
     assert_eq!(read.mode, Mode::Extended);
 }
 
@@ -60,6 +62,7 @@ fn settings_added_later_fall_back_to_their_defaults() {
     assert_eq!(config.max_layers, DEFAULT_MAX_LAYERS);
     assert_eq!(config.long_press_ms, DEFAULT_LONG_PRESS_MS);
     assert_eq!(config.metronome_bpm, DEFAULT_METRONOME_BPM);
+    assert_eq!(config.after_take, AfterTake::Play, "what the pedal always did");
     assert_eq!(config.mode, Mode::Mini);
 }
 
