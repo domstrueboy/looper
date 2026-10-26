@@ -202,7 +202,7 @@ fn the_mirror_is_fed_exactly_what_the_stack_records() {
     }
 
     let mut mirrored = vec![0.0f32; BLOCK * 8];
-    let m = captured.pop_slice(&mut mirrored);
+    let m = captured.samples.pop_slice(&mut mirrored);
     assert_eq!(m, path.output.stack.recorded_len(), "all of it, and no more");
     // Held back by the 8-sample monitoring delay, like the take itself.
     let expected: Vec<f32> = (0..m)
@@ -234,7 +234,7 @@ fn a_count_in_opens_the_take_on_the_bar_line() {
 
     assert_eq!(path.output.stack.recorded_len(), 14, "from the line on");
     let mut first = [0.0f32; 1];
-    captured.pop_slice(&mut first);
+    captured.samples.pop_slice(&mut first);
     // Input sample 1,838 (valued 1,839), heard at frame 1,846 through
     // the 8-sample monitoring delay.
     assert_eq!(first[0], 1_839.0);
@@ -327,4 +327,128 @@ fn a_count_in_called_off_after_its_take_opened_leaves_no_loop() {
 
     assert_eq!(path.output.stack.recorded_len(), 0);
     assert!(!path.output.stack.is_recording());
+}
+
+/// Every end the audio thread has reported so far.
+fn ends(captured: &mut Capture) -> Vec<TakeEnd> {
+    let mut ends = Vec::new();
+    while let Some(end) = captured.ends.try_pop() {
+        ends.push(end);
+    }
+    ends
+}
+
+#[test]
+fn a_take_ends_with_a_count_of_exactly_its_samples() {
+    // What the UI thread's copy splits its stream by - so it has to be
+    // what was passed on, to the sample, not what the state change said.
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    assert_eq!(
+        ends(&mut captured),
+        vec![TakeEnd::First {
+            samples: LOOP_LEN,
+            loop_len: LOOP_LEN,
+        }]
+    );
+}
+
+#[test]
+fn recording_into_a_dub_reports_two_takes_split_where_the_stack_split_them() {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Overdubbing);
+    for _ in 0..3 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    assert_eq!(
+        ends(&mut captured),
+        vec![
+            TakeEnd::First {
+                samples: LOOP_LEN,
+                loop_len: LOOP_LEN,
+            },
+            TakeEnd::Overdub {
+                samples: 3 * BLOCK,
+                start: 0,
+            },
+        ]
+    );
+}
+
+#[test]
+fn an_abandoned_dub_is_reported_dropped() {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+    control.publish_state(LoopState::Overdubbing);
+    drive(&mut path, &ramp(&mut next));
+    control.request_abandon_take();
+    control.publish_state(LoopState::Stopped);
+    drive(&mut path, &ramp(&mut next));
+
+    let ends = ends(&mut captured);
+    assert_eq!(
+        ends.last(),
+        Some(&TakeEnd::Dropped {
+            samples: BLOCK,
+            first: false,
+        })
+    );
+    assert_eq!(path.output.stack.layer_count(), 1, "and gone from the stack");
+}
+
+#[test]
+fn a_clear_reports_the_open_take_dropped_then_cleared() {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+
+    control.publish_state(LoopState::Recording);
+    for _ in 0..2 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.request_clear();
+    control.publish_state(LoopState::Idle);
+    drive(&mut path, &ramp(&mut next));
+
+    assert_eq!(
+        ends(&mut captured),
+        vec![
+            TakeEnd::Dropped {
+                samples: 2 * BLOCK,
+                first: true,
+            },
+            TakeEnd::Cleared,
+        ]
+    );
 }

@@ -13,13 +13,33 @@ const RATE: u32 = 44_100;
 /// which keeps them readable instead of megabyte-sized.
 const SLOW: u32 = 1;
 
-fn new_mirror() -> (HeapProd<f32>, LoopMirror) {
+/// The audio thread's side of the two rings.
+struct Feed {
+    samples: HeapProd<f32>,
+    ends: HeapProd<TakeEnd>,
+}
+
+impl Feed {
+    fn end(&mut self, end: TakeEnd) {
+        self.ends.try_push(end).expect("room for an end");
+    }
+}
+
+fn new_mirror() -> (Feed, LoopMirror) {
     new_mirror_at(RATE)
 }
 
-fn new_mirror_at(sample_rate: u32) -> (HeapProd<f32>, LoopMirror) {
-    let (producer, consumer) = HeapRb::<f32>::new(1024).split();
-    (producer, LoopMirror::new(consumer, sample_rate, Vec::new()))
+fn new_mirror_at(sample_rate: u32) -> (Feed, LoopMirror) {
+    let (samples, samples_rx) = HeapRb::<f32>::new(1024).split();
+    let (ends, ends_rx) = HeapRb::<TakeEnd>::new(16).split();
+    let capture = Capture {
+        samples: samples_rx,
+        ends: ends_rx,
+    };
+    (
+        Feed { samples, ends },
+        LoopMirror::new(capture, sample_rate, Vec::new()),
+    )
 }
 
 /// What a saved loop is checked against on the way back in. Limits are
@@ -31,22 +51,33 @@ fn settings(sample_rate: u32) -> AppConfig {
     }
 }
 
-/// One take, driven the way a frame loop would: the state changes, the
-/// input callback delivers samples, the state changes back. The extra
-/// tick is the frame on which the loop length settles.
+/// One take, driven the way the two threads would: the state changes,
+/// the audio thread passes the take's samples on and then reports its
+/// end, and the frames after it pick both up. Returns whether the loop
+/// on disk went out of date.
 fn record(
-    input: &mut HeapProd<f32>,
+    input: &mut Feed,
     mirror: &mut LoopMirror,
     state: LoopState,
     samples: &[f32],
     loop_len: usize,
     take_start: usize,
 ) -> bool {
-    mirror.tick(state, loop_len, take_start);
-    input.push_slice(samples);
-    mirror.tick(state, loop_len, take_start);
-    mirror.tick(LoopState::Looping, loop_len, take_start);
-    mirror.tick(LoopState::Looping, loop_len, take_start)
+    mirror.tick(state);
+    input.samples.push_slice(samples);
+    mirror.tick(state);
+    input.end(match state {
+        LoopState::Recording => TakeEnd::First {
+            samples: samples.len(),
+            loop_len,
+        },
+        _ => TakeEnd::Overdub {
+            samples: samples.len(),
+            start: take_start,
+        },
+    });
+    let ended = mirror.tick(LoopState::Looping);
+    mirror.tick(LoopState::Looping) || ended
 }
 
 /// Sample values, as small exact fractions.
@@ -228,23 +259,26 @@ fn removing_and_clearing_follow_the_stack() {
 }
 
 #[test]
-fn samples_arriving_with_no_take_open_are_dropped() {
+fn takes_split_where_the_audio_thread_says() {
+    // Not where this thread changed state: the audio thread goes on
+    // recording until it sees the change, so the next take's samples can
+    // be in before the last one's end is read. The counts decide.
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    mirror.tick(LoopState::Recording);
+    input.samples.push_slice(&s(&[1, 2, 3]));
+    input.samples.push_slice(&s(&[7, 8]));
+    input.end(TakeEnd::First {
+        samples: 3,
+        loop_len: 3,
+    });
+    mirror.tick(LoopState::Overdubbing);
+    input.end(TakeEnd::Overdub {
+        samples: 2,
+        start: 0,
+    });
+    mirror.tick(LoopState::Looping);
 
-    // Stragglers from the take that just ended.
-    input.push_slice(&s(&[99, 99]));
-    mirror.tick(LoopState::Looping, 2, 0);
-
-    record(
-        &mut input,
-        &mut mirror,
-        LoopState::Overdubbing,
-        &s(&[3, 4]),
-        2,
-        0,
-    );
-    assert_eq!(mirror.layers()[1], s(&[3, 4]), "no stragglers mixed in");
+    assert_eq!(mirror.layers(), vec![s(&[1, 2, 3]), s(&[7, 8, 0])]);
 }
 
 #[test]
@@ -392,8 +426,12 @@ fn a_first_take_that_captured_nothing_clears_the_saved_loop() {
     assert_eq!(load(&directory, &settings(RATE)).len(), 1);
 
     // Record pressed and undone before a single sample arrived.
-    mirror.tick(LoopState::Recording, 2, 0);
-    let out_of_date = mirror.tick(LoopState::Looping, 0, 0);
+    mirror.tick(LoopState::Recording);
+    input.end(TakeEnd::First {
+        samples: 0,
+        loop_len: 0,
+    });
+    let out_of_date = mirror.tick(LoopState::Looping);
 
     assert!(out_of_date, "the loop is gone, so the saved copy is stale");
     mirror.save(&directory).expect("saves");
@@ -456,45 +494,72 @@ fn a_first_take_shorter_than_the_loop_ends_in_silence() {
 }
 
 #[test]
-fn a_count_in_called_off_keeps_nothing_it_captured() {
+fn a_dropped_take_keeps_nothing_and_the_next_still_lines_up() {
+    // A count-in called off after its take opened, or a dub a double
+    // press took back: its samples are skipped, not left to be mistaken
+    // for the next take's.
     let (mut input, mut mirror) = new_mirror();
-    mirror.tick(LoopState::Arming, 0, 0);
-    input.push_slice(&s(&[1, 2]));
-    mirror.tick(LoopState::Arming, 0, 0);
-
-    let out_of_date = mirror.tick(LoopState::Idle, 0, 0);
-
+    mirror.tick(LoopState::Arming);
+    input.samples.push_slice(&s(&[1, 2]));
+    input.end(TakeEnd::Dropped {
+        samples: 2,
+        first: true,
+    });
+    let out_of_date = mirror.tick(LoopState::Idle);
     assert!(!out_of_date, "nothing to save");
     assert!(mirror.layers().is_empty());
+
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[5, 6]), 2, 0);
+    assert_eq!(mirror.layers(), vec![s(&[5, 6])]);
 }
 
 #[test]
-fn a_count_in_take_becomes_the_loop_once_recording() {
-    // Its samples arrive before the state here says Recording.
+fn a_count_in_take_becomes_the_loop() {
+    // Its samples arrive before this thread's state says Recording.
     let (mut input, mut mirror) = new_mirror();
-    mirror.tick(LoopState::Arming, 0, 0);
-    input.push_slice(&s(&[1, 2]));
-    mirror.tick(LoopState::Arming, 0, 0);
-    mirror.tick(LoopState::Recording, 0, 0);
-    input.push_slice(&s(&[3, 4]));
-    mirror.tick(LoopState::Looping, 4, 0);
-    mirror.tick(LoopState::Looping, 4, 0);
+    mirror.tick(LoopState::Arming);
+    input.samples.push_slice(&s(&[1, 2]));
+    mirror.tick(LoopState::Arming);
+    mirror.tick(LoopState::Recording);
+    input.samples.push_slice(&s(&[3, 4]));
+    input.end(TakeEnd::First {
+        samples: 4,
+        loop_len: 4,
+    });
+    mirror.tick(LoopState::Looping);
 
     assert_eq!(mirror.layers(), vec![s(&[1, 2, 3, 4])]);
 }
 
 #[test]
-fn a_count_in_called_off_leaves_redo_alone() {
-    // Nothing was replaced, so what redo could bring back still can.
+fn a_count_in_called_off_before_its_take_leaves_redo_alone() {
+    // No take opened, so nothing on the audio thread forgot anything.
     let (mut input, mut mirror) = new_mirror();
     record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
     mirror.remove_last_layer();
-    mirror.tick(LoopState::Idle, 0, 0);
+    mirror.tick(LoopState::Idle);
 
-    mirror.tick(LoopState::Arming, 0, 0);
-    mirror.tick(LoopState::Idle, 0, 0);
+    mirror.tick(LoopState::Arming);
+    mirror.tick(LoopState::Idle);
 
     assert!(mirror.can_redo());
+}
+
+#[test]
+fn a_first_take_dropped_after_opening_forgets_redo_too() {
+    // Opening it wiped the stack's - so redo here would bring back a
+    // layer the stack no longer has.
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    mirror.remove_last_layer();
+    mirror.tick(LoopState::Arming);
+    input.end(TakeEnd::Dropped {
+        samples: 0,
+        first: true,
+    });
+    mirror.tick(LoopState::Idle);
+
+    assert!(!mirror.can_redo());
 }
 
 // --- The saved tempo --------------------------------------------------------
@@ -546,14 +611,29 @@ fn a_tempo_file_that_does_not_read_is_no_tempo() {
 fn recording_straight_into_a_dub_makes_two_takes() {
     // Capturing never stops between them, but they are two layers.
     let (mut input, mut mirror) = new_mirror();
-    mirror.tick(LoopState::Recording, 0, 0);
-    input.push_slice(&s(&[1, 2]));
-    mirror.tick(LoopState::Recording, 0, 0);
-    mirror.tick(LoopState::Overdubbing, 0, 0);
-    input.push_slice(&s(&[3, 4]));
-    mirror.tick(LoopState::Overdubbing, 2, 0);
-    mirror.tick(LoopState::Looping, 2, 0);
-    mirror.tick(LoopState::Looping, 2, 0);
+    mirror.tick(LoopState::Recording);
+    input.samples.push_slice(&s(&[1, 2]));
+    mirror.tick(LoopState::Overdubbing);
+    input.end(TakeEnd::First {
+        samples: 2,
+        loop_len: 2,
+    });
+    input.samples.push_slice(&s(&[3, 4]));
+    input.end(TakeEnd::Overdub {
+        samples: 2,
+        start: 0,
+    });
+    mirror.tick(LoopState::Looping);
 
     assert_eq!(mirror.layers(), vec![s(&[1, 2]), s(&[3, 4])]);
+}
+
+#[test]
+fn a_clear_from_the_audio_thread_empties_the_copy() {
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    input.end(TakeEnd::Cleared);
+    let out_of_date = mirror.tick(LoopState::Idle);
+    assert!(out_of_date);
+    assert!(mirror.layers().is_empty());
 }

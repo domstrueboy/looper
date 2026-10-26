@@ -13,10 +13,11 @@ use ringbuf::{
     traits::{Consumer, Producer, Split},
 };
 
-use super::loop_stack::LoopStack;
+use super::loop_stack::{LoopStack, OpenTake};
 use super::metronome::Metronome;
 use super::shared_control::SharedControl;
 use crate::config::AppConfig;
+use crate::loop_mirror::{Capture, TakeEnd};
 use crate::state_machine::LoopState;
 
 /// Bounds one callback's worth of work at a fixed size, so the scratch
@@ -32,6 +33,9 @@ const SCRATCH_CAPACITY: usize = MAX_BLOCK_FRAMES;
 /// before samples start being dropped. Generous: losing any means the
 /// recorded loop can't be saved.
 const CAPTURE_BUFFER_SECONDS: usize = 2;
+
+/// Take ends the UI thread's copy can fall behind by.
+const TAKE_ENDS_CAPACITY: usize = 64;
 
 /// Holds the recorded signal back to where the monitored one is.
 ///
@@ -143,6 +147,13 @@ pub struct OutputPath {
     /// what was recorded - which only this side knows, now that a
     /// count-in's take opens here rather than when the state changes.
     capture: HeapProd<f32>,
+    /// Where each take ended, in order, for the same copy: how many of
+    /// the samples passed on were that take's, and what became of it.
+    /// Only this side knows - the UI thread's state changes reach the
+    /// stack a callback later, and some reach it not at all.
+    ends: HeapProd<TakeEnd>,
+    /// Samples passed on since the last take ended.
+    take_samples: usize,
     stack: LoopStack,
     metronome: Metronome,
     /// The callback only ever sees the published state, never the
@@ -179,14 +190,25 @@ impl OutputPath {
                     .metronome_on()
                     .then(|| self.metronome.bar_frames());
                 let abandon = self.control.take_abandon_take_request();
+                let before = self.stack.open_take();
                 apply_state_change(
                     &mut self.stack,
-                    &self.control,
                     self.previous_state,
                     state,
                     bar,
                     abandon,
                 );
+                if let Some(ended) = before
+                    && self.stack.open_take().map(|t| t.index) != Some(ended.index)
+                {
+                    let end = take_end(
+                        &self.stack,
+                        ended,
+                        std::mem::take(&mut self.take_samples),
+                        state == LoopState::Idle || abandon,
+                    );
+                    push_end(&mut self.ends, &self.control, end);
+                }
                 if state == LoopState::Arming || (state == LoopState::Recording && !take_open) {
                     self.metronome.restart();
                 }
@@ -194,7 +216,13 @@ impl OutputPath {
             }
 
             if self.control.take_clear_request() {
+                if let Some(open) = self.stack.open_take() {
+                    let samples = std::mem::take(&mut self.take_samples);
+                    let end = take_end(&self.stack, open, samples, true);
+                    push_end(&mut self.ends, &self.control, end);
+                }
                 self.stack.clear();
+                push_end(&mut self.ends, &self.control, TakeEnd::Cleared);
             }
             if self.control.take_remove_layer_request() {
                 self.stack.remove_last_layer();
@@ -213,7 +241,7 @@ impl OutputPath {
                 LoopState::Recording => {
                     let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
                     self.stack.record_first_layer(&self.recorded[..n]);
-                    pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
+                    self.take_samples += pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
                 }
                 LoopState::Arming => {
                     // Drained whether or not any of it is kept, so it
@@ -235,7 +263,7 @@ impl OutputPath {
                     if let Some(from) = keep_from {
                         let take = &self.recorded[from.min(n)..n];
                         self.stack.record_first_layer(take);
-                        pass_on(&mut self.capture, &self.control, take);
+                        self.take_samples += pass_on(&mut self.capture, &self.control, take);
                     }
                 }
                 LoopState::Looping | LoopState::Overdubbing => {
@@ -249,7 +277,7 @@ impl OutputPath {
                         recorded[n..].fill(0.0);
                         let gain = self.control.volume_pct();
                         self.stack.read_mixed_with_overdub(loop_out, recorded, gain);
-                        pass_on(&mut self.capture, &self.control, recorded);
+                        self.take_samples += pass_on(&mut self.capture, &self.control, recorded);
                     } else {
                         self.stack.read_mixed(loop_out, self.control.volume_pct());
                     }
@@ -281,6 +309,36 @@ impl OutputPath {
     }
 }
 
+/// What the UI thread's copy is told as `ended` is over: `samples` of
+/// what was passed on were its, and it's kept unless `dropped` - thrown
+/// away by a double press, a cancelled count-in or a clear.
+fn take_end(stack: &LoopStack, ended: OpenTake, samples: usize, dropped: bool) -> TakeEnd {
+    if dropped {
+        TakeEnd::Dropped {
+            samples,
+            first: ended.first,
+        }
+    } else if ended.first {
+        TakeEnd::First {
+            samples,
+            loop_len: stack.recorded_len(),
+        }
+    } else {
+        TakeEnd::Overdub {
+            samples,
+            start: ended.start,
+        }
+    }
+}
+
+/// A full ring is counted as lost capture, like a full sample ring: the
+/// copy can no longer tell where takes end, so it mustn't save.
+fn push_end(ends: &mut HeapProd<TakeEnd>, control: &SharedControl, end: TakeEnd) {
+    if ends.try_push(end).is_err() {
+        control.note_capture_lost(1);
+    }
+}
+
 /// Both halves and the rings between them, built as one piece because
 /// that is where the recorded signal's alignment against the monitored
 /// signal is decided - see the prefill below.
@@ -298,7 +356,7 @@ pub fn build_audio_path(
     input_channels: u16,
     output_channels: u16,
     restored: &[Vec<f32>],
-) -> (AudioPath, HeapCons<f32>) {
+) -> (AudioPath, Capture) {
     // Headroom between the callbacks, to absorb their jitter. It delays
     // the monitored signal by that much as a side effect, which is why
     // the recorded signal is held back to match - see `MonitorDelay`.
@@ -329,6 +387,10 @@ pub fn build_audio_path(
     // the loop can be saved.
     let (capture_tx, capture_rx) =
         HeapRb::<f32>::new(CAPTURE_BUFFER_SECONDS * sample_rate as usize).split();
+    // And where each take in them ends. A take ends at most once per
+    // state change, a few a second at the very most; this is room for
+    // seconds of them.
+    let (ends_tx, ends_rx) = HeapRb::<TakeEnd>::new(TAKE_ENDS_CAPACITY).split();
 
     let loop_capacity = settings.max_loop_secs as usize * sample_rate as usize;
     let mut stack = LoopStack::new(loop_capacity, settings.max_layers as usize);
@@ -359,12 +421,20 @@ pub fn build_audio_path(
             passthrough: passthrough_rx,
             recorder: recorder_rx,
             capture: capture_tx,
+            ends: ends_tx,
+            take_samples: 0,
             stack,
             metronome: Metronome::new(sample_rate, settings.metronome_bpm),
             previous_state: LoopState::Idle,
         },
     };
-    (path, capture_rx)
+    (
+        path,
+        Capture {
+            samples: capture_rx,
+            ends: ends_rx,
+        },
+    )
 }
 
 /// The two halves as the backend sees them.
@@ -392,7 +462,7 @@ pub struct LooperStreams {
     /// Dropping this stops the audio.
     pub stream: Box<dyn AudioStream>,
     pub sample_rate: u32,
-    pub captured: HeapCons<f32>,
+    pub captured: Capture,
 }
 
 /// One end of the pair `settings` names.
@@ -510,7 +580,6 @@ pub fn build_looper_streams(
 /// overdub this change ends, rather than keeping it.
 fn apply_state_change(
     stack: &mut LoopStack,
-    control: &SharedControl,
     from: LoopState,
     to: LoopState,
     bar_frames: Option<f64>,
@@ -530,25 +599,23 @@ fn apply_state_change(
         // A count-in called off after its take had opened.
         LoopState::Idle if from == LoopState::Arming && stack.is_recording() => stack.clear(),
         LoopState::Overdubbing => {
-            if stack.begin_overdub() {
-                // Where this take starts, for the UI thread's copy: it
-                // can't see the playback position the layer was aligned
-                // to otherwise.
-                control.publish_take_start(stack.play_pos());
-            }
+            // Where it begins goes to the UI thread's copy with its end.
+            stack.begin_overdub();
         }
         _ => {}
     }
 }
 
-/// Hands recorded samples to the UI thread's copy of the loop. A full
-/// ring is counted rather than waited on: that copy no longer matches
-/// what's playing, and saving it would be wrong.
-fn pass_on(capture: &mut HeapProd<f32>, control: &SharedControl, samples: &[f32]) {
+/// Hands recorded samples to the UI thread's copy of the loop, returning
+/// how many went - what a take's end report counts. A full ring is
+/// counted rather than waited on: that copy no longer matches what's
+/// playing, and saving it would be wrong.
+fn pass_on(capture: &mut HeapProd<f32>, control: &SharedControl, samples: &[f32]) -> usize {
     let passed = capture.push_slice(samples);
     if passed < samples.len() {
         control.note_capture_lost(samples.len() - passed);
     }
+    passed
 }
 
 /// Adds `loop_signal` onto `dry` in place. Not clamped - the sum can run

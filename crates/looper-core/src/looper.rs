@@ -94,6 +94,8 @@ pub struct LooperState {
     /// shown as they happen: they arrive in bursts, and a line that
     /// flickers is one nobody reads.
     underruns: usize,
+    /// See `take_in_flight()`.
+    take_in_flight: bool,
     /// Holding it is what keeps the audio running; dropping it stops.
     _stream: Box<dyn AudioStream>,
 }
@@ -164,6 +166,7 @@ impl LooperState {
             now: Instant::now(),
             fault,
             underruns: 0,
+            take_in_flight: false,
             _stream: streams.stream,
         })
     }
@@ -321,10 +324,20 @@ impl LooperState {
         self.control.publish_muted_layers(self.muted_layers);
     }
 
+    /// Whether the audio thread still had a take open as of this frame.
+    /// While it does, the take's end hasn't reached the copy yet, so the
+    /// copy and the stack can disagree on which layer is last - remove or
+    /// redo then would act on different layers. A frame or so at most.
+    pub fn take_in_flight(&self) -> bool {
+        self.take_in_flight
+    }
+
     /// Only while nothing is being recorded - dropping a finished layer
     /// mid-take would be ambiguous about which one is meant.
     pub fn can_remove_layer(&self) -> bool {
-        self.layer_count() > 0 && matches!(self.state(), LoopState::Looping | LoopState::Stopped)
+        self.layer_count() > 0
+            && matches!(self.state(), LoopState::Looping | LoopState::Stopped)
+            && !self.take_in_flight
     }
 
     /// Drops the newest layer. Dropping the only one leaves nothing to
@@ -411,6 +424,7 @@ impl LooperState {
                 self.state(),
                 LoopState::Idle | LoopState::Looping | LoopState::Stopped
             )
+            && !self.take_in_flight
     }
 
     /// Brings back the layer "remove" dropped, unmuted. From Idle the
@@ -532,17 +546,10 @@ impl LooperState {
         if self.control.take_capture_lost() > 0 {
             self.mirror.note_lost_samples();
         }
-        // Read in this order: a take seen closed comes with the length it
-        // closed on. Seen open, the length is still moving, and the copy
-        // is told there's none yet - taking it then saved a loop the
-        // length that was played rather than the bar it was rounded to.
-        let take_open = self.control.take_open();
-        let settled_len = if take_open { 0 } else { self.control.loop_len() };
-        if self.mirror.tick(
-            self.state_machine.state(),
-            settled_len,
-            self.control.take_start(),
-        ) {
+        // Before the copy reads the take ends: seen closed here, the end
+        // of every take is already on its ring. See `take_in_flight`.
+        self.take_in_flight = self.control.take_open();
+        if self.mirror.tick(self.state_machine.state()) {
             self.save_loop();
         }
     }
@@ -626,7 +633,6 @@ impl LooperState {
         match self.state() {
             LoopState::Overdubbing => {
                 self.control.request_abandon_take();
-                self.mirror.abandon_take();
                 self.state_machine.toggle_overdub();
                 self.state_machine.press();
             }

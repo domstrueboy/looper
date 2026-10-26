@@ -322,15 +322,10 @@ How the main control behaves, as settings rather than one fixed way.
 - **7d. Stop mode.** *Immediate* (today's), *At the loop end*, or *Fade
   out* over a few seconds. Fades scale the loop bus on the audio thread;
   the loop end is known to the frame.
-- **7e. Exact take edges in the saved copy.** The UI thread's copy opens
-  and closes takes when *it* changes the state, but the audio thread
-  goes on recording until its next callback sees the change. So up to
-  one audio block (1.5 ms on ASIO, 10 ms on WASAPI) at a take's end is
-  missing from what's saved, and after 7b's record-into-dub, that block
-  of the first take lands at the start of the overdub instead. Fix: the
-  output path counts the samples it passes on and publishes the count
-  at each take's end, and the copy splits its stream there rather than
-  at the UI's state change.
+- **7e. Exact take edges in the saved copy - done.** The audio thread
+  reports each take's end on a ring of its own - how many samples were
+  its, and whether it was a first take, an overdub, dropped or a clear -
+  and the copy splits its stream by those, not by its own state changes.
 
 ### 8. Tempo and levels - mini
 

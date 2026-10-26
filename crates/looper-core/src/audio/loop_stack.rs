@@ -38,6 +38,14 @@ impl Layer {
     }
 }
 
+/// See `LoopStack::open_take`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OpenTake {
+    pub index: usize,
+    pub first: bool,
+    pub start: usize,
+}
+
 /// A stack of aligned loop layers: the first recording fixes the loop
 /// length, and each overdub adds another layer on top of it, playing back
 /// as their sum. Layers are recorded and dropped independently, which is
@@ -123,6 +131,16 @@ impl LoopStack {
     /// before the state said Recording.
     pub fn is_recording(&self) -> bool {
         self.recording.is_some()
+    }
+
+    /// The take being recorded, if any: which layer, whether it's the
+    /// first, and where an overdub began.
+    pub fn open_take(&self) -> Option<OpenTake> {
+        self.recording.map(|index| OpenTake {
+            index,
+            first: self.loop_len == 0,
+            start: self.layers[index].start,
+        })
     }
 
     pub fn layer_count(&self) -> usize {

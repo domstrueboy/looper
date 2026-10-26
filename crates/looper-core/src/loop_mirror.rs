@@ -22,42 +22,68 @@ struct Take {
     samples: Vec<f32>,
 }
 
+/// What the audio thread reports as each take ends, in the order they
+/// end, on a ring of their own beside the samples. `samples` is how many
+/// of the samples passed on since the last end were this take's.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TakeEnd {
+    /// A first take, which set the loop `loop_len` long - 0 for one with
+    /// nothing in it, which leaves no loop.
+    First { samples: usize, loop_len: usize },
+    /// An overdub, begun at loop position `start`.
+    Overdub { samples: usize, start: usize },
+    /// A take thrown away: a dub a double press took back, a count-in
+    /// called off after it opened, a take ended by a clear. `first` says
+    /// it was a first take, whose opening wiped what redo could bring
+    /// back - on the audio thread, and so here.
+    Dropped { samples: usize, first: bool },
+    /// The loop was cleared.
+    Cleared,
+}
+
+/// The two rings the audio thread feeds this copy through.
+pub struct Capture {
+    pub samples: HeapCons<f32>,
+    pub ends: HeapCons<TakeEnd>,
+}
+
 /// The UI thread's own copy of the recorded loop, kept so it can be
 /// saved: the layer stack itself lives inside the audio callback, where
 /// nothing may reach in and read it.
 ///
-/// Captured samples arrive through a ring buffer - the same lock-free
-/// audio -> UI direction the telemetry uses - and takes are stored as
-/// played, only laid out into layers when saving. So this costs about
-/// what was actually recorded rather than a second full-size stack.
+/// Fed by the audio thread with exactly what the stack recorded, and told
+/// by it where each take ended - not by this thread's own state changes,
+/// which reach the stack a callback later, and sometimes not at all. A
+/// take is stored as played and only laid out into a layer when saving,
+/// so this costs about what was actually recorded rather than a second
+/// full-size stack.
 pub struct LoopMirror {
-    captured: HeapCons<f32>,
+    capture: Capture,
+    /// Samples arrived but not yet claimed by an ended take: the one
+    /// still being recorded.
+    pending: Vec<f32>,
     previous_state: LoopState,
-    open_take: Option<Vec<f32>>,
     finished: Vec<Take>,
     /// Takes removed since the last one was recorded, newest last - what
     /// redo can bring back. Mirrors the layer stack's own count of them.
     removed: Vec<Take>,
-    /// Taken from the audio thread's telemetry rather than from how many
-    /// samples arrived here, a frame after a take ends - see `tick`.
+    /// As the audio thread settled it, from the first take's end.
     loop_len: usize,
     sample_rate: u32,
-    save_pending: bool,
-    /// Set if the capture ring overflowed while a take was open: the
-    /// takes held here no longer match what is playing, so they must not
-    /// be written over a good save. Cleared once the takes it applies to
-    /// are gone - a fresh loop is trustworthy again, and latching it for
-    /// the whole session would silently stop saving anything.
+    /// Set if the capture ring overflowed: the takes held here no longer
+    /// match what is playing, so they must not be written over a good
+    /// save. Cleared as a new loop starts - latching it for the whole
+    /// session would silently stop saving anything.
     lost_samples: bool,
 }
 
 impl LoopMirror {
-    pub fn new(captured: HeapCons<f32>, sample_rate: u32, restored: Vec<Vec<f32>>) -> Self {
+    pub fn new(capture: Capture, sample_rate: u32, restored: Vec<Vec<f32>>) -> Self {
         let loop_len = restored.first().map(Vec::len).unwrap_or(0);
         Self {
-            captured,
+            capture,
+            pending: Vec::new(),
             previous_state: LoopState::Idle,
-            open_take: None,
             finished: restored
                 .into_iter()
                 .map(|samples| Take { start: 0, samples })
@@ -65,7 +91,6 @@ impl LoopMirror {
             removed: Vec::new(),
             loop_len,
             sample_rate,
-            save_pending: false,
             lost_samples: false,
         }
     }
@@ -78,108 +103,95 @@ impl LoopMirror {
 
     /// Call once per frame, after the state machine has been advanced.
     /// Returns whether the loop on disk is now out of date.
-    ///
-    /// `loop_len` and `take_start` come from the audio thread's
-    /// telemetry: the length it settled on, and where the last overdub
-    /// began.
-    pub fn tick(&mut self, state: LoopState, loop_len: usize, take_start: usize) -> bool {
-        // Drain first, so samples captured just before a transition
-        // still land in the take that is ending. Anything arriving with
-        // no take open belongs to one that has already finished, and is
-        // dropped rather than corrupting the next.
+    pub fn tick(&mut self, state: LoopState) -> bool {
+        // Ends before samples: a take's samples are passed on before its
+        // end, so every end read here has all of its samples in by the
+        // time they're drained.
+        let mut ends = Vec::new();
+        while let Some(end) = self.capture.ends.try_pop() {
+            ends.push(end);
+        }
         let mut scratch = [0.0f32; 4096];
         loop {
-            let n = self.captured.pop_slice(&mut scratch);
+            let n = self.capture.samples.pop_slice(&mut scratch);
             if n == 0 {
                 break;
             }
-            if let Some(take) = &mut self.open_take {
-                take.extend_from_slice(&scratch[..n]);
-            }
+            self.pending.extend_from_slice(&scratch[..n]);
         }
 
-        // The audio thread fixes the loop length a callback or two after
-        // the state change that ended the take, so it's read on a later
-        // frame than the transition.
-        let mut out_of_date = false;
-        if self.save_pending {
-            self.loop_len = loop_len;
-            if self.loop_len > 0 {
-                self.save_pending = false;
-                out_of_date = true;
-            }
-        }
-
-        // Arming counts: a count-in's take opens on the audio thread, at
-        // the bar line, before the state here says Recording.
-        let is_capturing = |state| {
-            matches!(
-                state,
-                LoopState::Arming | LoopState::Recording | LoopState::Overdubbing
-            )
-        };
-        let capturing = is_capturing(state);
-        let was_capturing = is_capturing(self.previous_state);
-
-        if capturing && !was_capturing {
-            self.open_take = Some(Vec::new());
-            if state == LoopState::Overdubbing {
-                // The new take is recorded into the slot a removed one
-                // held.
-                self.removed.clear();
-            }
-        }
-        if state == LoopState::Recording && self.previous_state != LoopState::Recording {
-            // The first take of a new loop replaces everything -
-            // including any doubt about what the old one held, and what
-            // redo could bring back. Not before: a count-in can still be
-            // called off.
-            self.finished.clear();
+        // Kept in step with this thread's own state for redo's sake: the
+        // stack forgets what redo could bring back as a take opens, and
+        // redo is offered from here, before any end can say so.
+        let opens_take = matches!(state, LoopState::Recording | LoopState::Overdubbing);
+        if opens_take && state != self.previous_state {
             self.removed.clear();
-            self.loop_len = 0;
-            self.lost_samples = false;
+            if state == LoopState::Recording {
+                // A new loop: whatever went missing from the old one no
+                // longer matters.
+                self.lost_samples = false;
+            }
         }
-        // Recording straight into an overdub is a take ending and another
-        // beginning, though capturing never stops in between.
-        let dubbed_on = self.previous_state == LoopState::Recording && state == LoopState::Overdubbing;
-        if was_capturing && (!capturing || dubbed_on) {
-            let take = self.open_take.take().unwrap_or_default();
-            if self.previous_state == LoopState::Arming {
-                // A pre-roll called off: whatever its count-in opened
-                // never became a loop.
-            } else if !take.is_empty() {
-                // Overdubs begin wherever playback had reached; a first
-                // take always begins at the top.
-                let start = if self.previous_state == LoopState::Overdubbing {
-                    take_start
-                } else {
-                    0
-                };
+        self.previous_state = state;
+
+        let mut out_of_date = false;
+        for end in ends {
+            out_of_date |= self.end_take(end);
+        }
+        out_of_date
+    }
+
+    /// Settles one ended take. Returns whether the loop on disk is out of
+    /// date because of it.
+    fn end_take(&mut self, end: TakeEnd) -> bool {
+        match end {
+            TakeEnd::First { samples, loop_len } => {
+                let take = self.claim(samples);
+                // A first take replaces everything.
+                self.finished.clear();
+                self.removed.clear();
+                self.loop_len = loop_len;
+                if loop_len > 0 {
+                    self.finished.push(Take {
+                        start: 0,
+                        samples: take,
+                    });
+                }
+                // Even with nothing in it: the old loop is gone, and left
+                // on disk it would come back at the next launch.
+                true
+            }
+            TakeEnd::Overdub { samples, start } => {
+                let take = self.claim(samples);
+                if take.is_empty() || self.loop_len == 0 {
+                    return false;
+                }
                 self.finished.push(Take {
                     start,
                     samples: take,
                 });
-                self.save_pending = true;
-            } else if self.previous_state == LoopState::Recording {
-                // Record pressed and undone before a sample arrived: the
-                // old loop has been replaced by no loop. No length is
-                // coming to wait for, so the copy on disk is stale as of
-                // now - left alone it would come back at the next launch.
-                out_of_date = true;
+                true
+            }
+            TakeEnd::Dropped { samples, first } => {
+                self.claim(samples);
+                if first {
+                    self.removed.clear();
+                }
+                false
+            }
+            TakeEnd::Cleared => {
+                self.finished.clear();
+                self.removed.clear();
+                self.loop_len = 0;
+                true
             }
         }
-        if dubbed_on {
-            self.open_take = Some(Vec::new());
-        }
-
-        self.previous_state = state;
-        out_of_date
     }
 
-    /// The take in progress is being thrown away: what it captured is
-    /// dropped, and so is whatever of it is still on the way.
-    pub fn abandon_take(&mut self) {
-        self.open_take = None;
+    /// The next `samples` arrived, as one take's.
+    fn claim(&mut self, samples: usize) -> Vec<f32> {
+        let rest = self.pending.split_off(samples.min(self.pending.len()));
+        std::mem::replace(&mut self.pending, rest)
     }
 
     pub fn remove_last_layer(&mut self) {
@@ -198,12 +210,13 @@ impl LoopMirror {
         }
     }
 
+    /// Straight away, for the screen and the files. The audio thread's
+    /// own ends for it follow, and settle to the same: the takes in
+    /// flight are reported dropped, then cleared.
     pub fn clear(&mut self) {
         self.finished.clear();
         self.removed.clear();
-        self.open_take = None;
         self.loop_len = 0;
-        self.save_pending = false;
         self.lost_samples = false;
     }
 

@@ -18,13 +18,10 @@ pub struct SharedControl {
     loop_len: AtomicUsize,
     play_pos: AtomicUsize,
     layer_count: AtomicUsize,
-    /// Whether the stack still has a take open. While one is, `loop_len`
-    /// is how much has been recorded so far rather than what the take
-    /// settled on - a stop rounded to the bar changes it once more.
+    /// Whether the stack still has a take open. Published last, so a
+    /// reader that sees it closed also sees every take's end report: the
+    /// UI thread holds off remove and redo until then.
     take_open: AtomicBool,
-    /// Where the last overdub began, so the copy the UI thread keeps can
-    /// lay that take out in the same place.
-    take_start: AtomicUsize,
     /// Samples that never reached the UI thread's copy, because its ring
     /// was full. Means that copy no longer matches what's playing.
     capture_lost: AtomicUsize,
@@ -62,7 +59,7 @@ impl SharedControl {
             play_pos: AtomicUsize::new(0),
             layer_count: AtomicUsize::new(0),
             take_open: AtomicBool::new(false),
-            take_start: AtomicUsize::new(0),
+
             capture_lost: AtomicUsize::new(0),
             input_underruns: AtomicUsize::new(0),
             output_underruns: AtomicUsize::new(0),
@@ -123,9 +120,6 @@ impl SharedControl {
         self.take_open.load(Ordering::Acquire)
     }
 
-    pub fn take_start(&self) -> usize {
-        self.take_start.load(Ordering::Acquire)
-    }
 
     /// Drains the count of samples lost since the last call.
     pub fn take_capture_lost(&self) -> usize {
@@ -175,9 +169,6 @@ impl SharedControl {
         self.redo_layer_requested.swap(false, Ordering::AcqRel)
     }
 
-    pub(super) fn publish_take_start(&self, pos: usize) {
-        self.take_start.store(pos, Ordering::Release);
-    }
 
     pub(super) fn note_capture_lost(&self, samples: usize) {
         self.capture_lost.fetch_add(samples, Ordering::Relaxed);

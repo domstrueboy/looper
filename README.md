@@ -211,7 +211,7 @@ flowchart TB
     BACKEND --> SPEAKERS
     BACKEND ==>|"on failure"| FAULT
     FAULT ==> LOOPER
-    INPATH ==>|"delayed samples"| CAPTURE
+    OUTPATH ==>|"recorded samples + take ends"| CAPTURE
     CAPTURE ==> MIRROR
 ```
 
@@ -303,17 +303,17 @@ play -> dub -> play**, every dub a new layer, and a **double press**
 stops - the NUX Dual Loop Stereo's footswitch. The press ending the
 first take publishes `Overdubbing` straight from `Recording`, which the
 audio thread already takes in one go - close the take, round it to the
-bar, open a layer at the top. The mirror closes one take and opens the
-next on that transition, since capturing never stops in between. Not
-with `max_layers = 1`: there's no layer to dub into.
+bar, open a layer at the top - and reports both takes' ends, so the
+mirror splits them where the stack did. Not with `max_layers = 1`:
+there's no layer to dub into.
 
 A double is two presses within 400 ms (`input.rs`), and since a press
 acts as it goes down, the first half has already happened by the time
 the second arrives. So the double takes it back: a dub the first half
 opened is *abandoned* - `request_abandon_take` is set before the state
 change is published, the audio thread drops the open layer rather than
-counting it, and the mirror drops its copy - so a double never leaves a
-sliver of a layer. Three quick presses are a double and a single, not
+counting it and reports it dropped, and the mirror skips its samples -
+so a double never leaves a sliver of a layer. Three quick presses are a double and a single, not
 two doubles. Outside the dub cycle a single press already stops, so a
 double is just two presses.
 
@@ -325,12 +325,7 @@ which wipes whatever the press had started. A held key doesn't repeat
 the press either: `InputHandler` reads whether the control is down, not
 the OS's key-repeat events.
 
-While a take is open, the length the audio thread reports is how much
-has been recorded so far, not what the take will settle on - a stop
-rounded to the bar changes it once more. So it also reports whether a
-take is open, published last, and the UI thread's copy accepts a length
-only once it sees the take closed. Taking it earlier saved the loop at
-the length that was played rather than the bar it was rounded to.
+
 
 ### Pre-roll
 
@@ -357,12 +352,10 @@ off the click for good. Three things make it work:
   output drains it, so the ring is already flowing at the line rather
   than filling from empty.
 - The UI thread's copy is fed by the *output* path, with exactly what
-  the stack recorded, rather than by the input path - only the output
-  side knows where the take began. The copy opens its take at `Arming`
-  but treats it as a new loop only once the state reaches `Recording`,
-  so a cancelled count-in throws nothing away, redo included.
+  the stack recorded, and told by it where each take ended - see "Why a
+  second copy exists".
 - A count-in cancelled after its take opened arrives as `Arming` ->
-  `Idle` with a take open, and the stack drops it.
+  `Idle` with a take open; the stack drops it and reports it dropped.
 
 **Overdub** deliberately sits *off* that cycle, on its own control (the
 `O` key or the Overdub button), so the press cycle above keeps behaving
@@ -454,9 +447,10 @@ length is exact to the frame. The *UI thread* only decides when to stop:
 if the nearest bar line is still ahead, it holds the state at
 `Recording` until the telemetry passes it, then stops as usual. That
 keeps the input path gated on the published state exactly as before -
-nothing is ever recorded after the state says it has stopped. The mirror
-lays the first take out cut at the loop length rather than wrapped, so
-the saved loop is the one that plays.
+nothing is ever recorded after the state says it has stopped. The first
+take's end report carries the length it was rounded to, and the mirror
+lays the take out cut at that length rather than wrapped, so the saved
+loop is the one that plays.
 
 Once a loop exists it sets the tempo (`tempo.rs`): the click follows
 the loop rather than `metronome_bpm`, so it lands on the loop's top
@@ -616,12 +610,25 @@ always seeded from the same list.
 
 `LoopStack` lives inside the output callback, where nothing may reach in
 and read it - so the UI thread keeps its own copy (`loop_mirror.rs`) to
-have something it can write. The input callback pushes captured samples
-into a second ring buffer alongside the recorder's, and the UI thread
-drains it each frame. Same lock-free audio -> UI direction as the
-telemetry; no lock anywhere near the callback. Both rings are fed from
-the same delayed signal (see below), so the two layouts describe the
-same audio.
+have something it can write. Same lock-free audio -> UI direction as
+the telemetry; no lock anywhere near the callback. Two rings carry it:
+
+- **Samples** - the output callback passes on exactly what the stack
+  recorded, after recording it, so the two hold the same audio.
+- **Take ends** - as each take ends, how many of those samples were its,
+  and what it was: a first take (with the length the stack settled on),
+  an overdub (with where it began), dropped, or a clear.
+
+The copy splits the sample stream by those counts, not by its own state
+changes. Those reach the stack a callback later - up to 1.5 ms on ASIO,
+10 ms on WASAPI - and some never reach it at all, so splitting by them
+lost a take's last block and, after recording straight into a dub, put
+it at the start of the overdub. Each frame it reads the ends *before*
+draining samples: a take's samples are passed on before its end, so an
+end read always has all its samples in. Remove and redo wait while the
+audio thread still has a take open (`take_open`, published last), since
+until its end arrives the copy and the stack disagree on which layer is
+last.
 
 Takes are stored as they were played - where each began, and the samples
 - and only laid out into full-length layers when saving, so the copy
