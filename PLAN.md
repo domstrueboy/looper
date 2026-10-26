@@ -303,12 +303,12 @@ Split four ways:
 
 How the main control behaves, as settings rather than one fixed way.
 
-- **7a. Act on press-down.** A short press fires on *release* today
-  (`input.rs`), so every record start and stop lands as late as the
-  key or foot stayed down - typically 100-200 ms, now the largest timing
-  error left. Fire on the press instead, and keep the hold as an extra
-  on top: a long hold still clears, and a clear wipes whatever the press
-  had just started, so nothing is lost by acting early.
+- **7a. Act on press-down - done.** A press fired on *release*, so
+  every record start and stop landed as late as the key or foot stayed
+  down - 100-200 ms. It fires on the way down now; a long hold still
+  clears, wiping whatever the press had just started. It also showed
+  the UI thread's copy could save a take at its played length rather
+  than its rounded one, now fixed.
 - **7b. Dub mode.** REC -> PLAY -> DUB (today's) or REC -> DUB -> PLAY:
   stopping the first take goes straight into an overdub, for recording
   the second part without waiting a pass.

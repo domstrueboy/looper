@@ -246,7 +246,7 @@ crates/
     src/action.rs             what a rendered frame asks the app to do
     src/config.rs             the settings, as TOML in the per-user
                               config dir (config_tests.rs)
-    src/input.rs              short-press vs long-press-clear detection
+    src/input.rs              press (on the way down) vs long-press-clear
     src/state_machine.rs      the pedal logic - pure, no audio, no egui
     src/tempo.rs              a loop's tempo from its length, and ½ / 2×
     src/preroll.rs            the countdown before the first recording
@@ -297,6 +297,21 @@ Mimics a classic single-footswitch looper pedal:
 fires the moment the hold crosses the threshold while still held, not on
 release. How long that hold is is the `long_press_ms` setting, 2s by
 default, and the looper screen's hint line says the configured value.
+
+A **press** acts the moment the control goes down, not when it's let
+go. Waiting for the release, to be sure a press wasn't the start of a
+hold, made every take start and stop as late as the key stayed down -
+100-200 ms. Acting at once is safe because a hold turns into a clear,
+which wipes whatever the press had started. A held key doesn't repeat
+the press either: `InputHandler` reads whether the control is down, not
+the OS's key-repeat events.
+
+While a take is open, the length the audio thread reports is how much
+has been recorded so far, not what the take will settle on - a stop
+rounded to the bar changes it once more. So it also reports whether a
+take is open, published last, and the UI thread's copy accepts a length
+only once it sees the take closed. Taking it earlier saved the loop at
+the length that was played rather than the bar it was rounded to.
 
 ### Pre-roll
 

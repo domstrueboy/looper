@@ -531,9 +531,15 @@ impl LooperState {
         if self.control.take_capture_lost() > 0 {
             self.mirror.note_lost_samples();
         }
+        // Read in this order: a take seen closed comes with the length it
+        // closed on. Seen open, the length is still moving, and the copy
+        // is told there's none yet - taking it then saved a loop the
+        // length that was played rather than the bar it was rounded to.
+        let take_open = self.control.take_open();
+        let settled_len = if take_open { 0 } else { self.control.loop_len() };
         if self.mirror.tick(
             self.state_machine.state(),
-            self.control.loop_len(),
+            settled_len,
             self.control.take_start(),
         ) {
             self.save_loop();
@@ -565,7 +571,7 @@ impl LooperState {
     /// that pairing can't be forgotten at a call site.
     fn apply(&mut self, event: InputEvent, now: Instant) {
         match event {
-            InputEvent::ShortPress => {
+            InputEvent::Press => {
                 // A second press while waiting for the bar line means
                 // now: the take is still rounded, the rest plays silent.
                 if self.state() == LoopState::Recording && self.stop_at.is_none() {

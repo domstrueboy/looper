@@ -15,6 +15,10 @@ pub struct SharedControl {
     loop_len: AtomicUsize,
     play_pos: AtomicUsize,
     layer_count: AtomicUsize,
+    /// Whether the stack still has a take open. While one is, `loop_len`
+    /// is how much has been recorded so far rather than what the take
+    /// settled on - a stop rounded to the bar changes it once more.
+    take_open: AtomicBool,
     /// Where the last overdub began, so the copy the UI thread keeps can
     /// lay that take out in the same place.
     take_start: AtomicUsize,
@@ -53,6 +57,7 @@ impl SharedControl {
             loop_len: AtomicUsize::new(0),
             play_pos: AtomicUsize::new(0),
             layer_count: AtomicUsize::new(0),
+            take_open: AtomicBool::new(false),
             take_start: AtomicUsize::new(0),
             capture_lost: AtomicUsize::new(0),
             input_underruns: AtomicUsize::new(0),
@@ -101,6 +106,10 @@ impl SharedControl {
 
     pub fn loop_len(&self) -> usize {
         self.loop_len.load(Ordering::Acquire)
+    }
+
+    pub fn take_open(&self) -> bool {
+        self.take_open.load(Ordering::Acquire)
     }
 
     pub fn take_start(&self) -> usize {
@@ -159,10 +168,13 @@ impl SharedControl {
         self.capture_lost.fetch_add(samples, Ordering::Relaxed);
     }
 
-    pub(super) fn publish_telemetry(&self, len: usize, pos: usize, layers: usize) {
+    /// `take_open` last, so a reader that sees it closed also sees the
+    /// length the take closed on.
+    pub(super) fn publish_telemetry(&self, len: usize, pos: usize, layers: usize, take_open: bool) {
         self.loop_len.store(len, Ordering::Release);
         self.play_pos.store(pos, Ordering::Release);
         self.layer_count.store(layers, Ordering::Release);
+        self.take_open.store(take_open, Ordering::Release);
     }
 
     pub(super) fn metronome_on(&self) -> bool {

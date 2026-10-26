@@ -274,6 +274,7 @@ impl OutputPath {
             self.stack.recorded_len(),
             self.stack.play_pos(),
             self.stack.layer_count(),
+            self.stack.is_recording(),
         );
     }
 }

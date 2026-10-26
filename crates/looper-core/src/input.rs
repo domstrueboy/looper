@@ -1,13 +1,18 @@
 use std::time::{Duration, Instant};
 
-/// Turns "is it down right now" into short-press vs long-press-clear, like
-/// a real footswitch: long-press fires the moment the threshold is crossed,
-/// while still held; a short press fires on release, once it's known not to
-/// be a long one.
+/// Turns "is it down right now" into a press and a long-press-clear, like
+/// a real footswitch: the press fires the moment the control goes down,
+/// and holding it on past the threshold clears as well, while still held.
+///
+/// On the way down, not the way up. A press that waited for the release,
+/// to be sure it wasn't the start of a hold, started and stopped every
+/// take as late as the key or foot stayed down: 100-200 ms of it. Acting
+/// at once costs nothing, because whatever the press began is wiped by
+/// the clear a hold turns into.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
     None,
-    ShortPress,
+    Press,
     LongPressClear,
 }
 
@@ -45,7 +50,7 @@ impl InputHandler {
                 None => {
                     self.pressed_at = Some(now);
                     self.long_press_fired = false;
-                    InputEvent::None
+                    InputEvent::Press
                 }
                 Some(pressed_at) => {
                     if !self.long_press_fired
@@ -58,9 +63,8 @@ impl InputHandler {
                     }
                 }
             }
-        } else if self.pressed_at.take().is_some() && !self.long_press_fired {
-            InputEvent::ShortPress
         } else {
+            self.pressed_at = None;
             InputEvent::None
         }
     }

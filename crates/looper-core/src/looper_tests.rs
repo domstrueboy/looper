@@ -36,8 +36,8 @@ fn start(name: &str, settings: &AppConfig) -> (LooperState, MockDriver, PathBuf)
     (looper, driver, dir)
 }
 
-/// One press: down on a frame, up on the next. `ShortPress` is a release,
-/// so it takes both.
+/// One press: down on a frame, up on the next. The press itself is the
+/// first frame; the second lets go, so the next press counts as new.
 fn press(looper: &mut LooperState, down: Instant, up: Instant) {
     looper.tick(true, down);
     looper.tick(false, up);
@@ -120,10 +120,10 @@ fn a_press_on_the_frame_the_pre_roll_expires_calls_it_off() {
     press(&mut looper, start, start);
     assert_eq!(looper.state(), LoopState::Arming, "counting down");
 
-    // Down before the countdown runs out, up exactly as it does.
+    // Down on exactly the frame the countdown runs out.
     let expiry = start + Duration::from_millis(PREROLL_MS as u64);
-    looper.tick(true, expiry - Duration::from_millis(1));
-    looper.tick(false, expiry);
+    looper.tick(false, expiry - Duration::from_millis(1));
+    looper.tick(true, expiry);
 
     assert_eq!(
         looper.state(),

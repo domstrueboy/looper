@@ -9,18 +9,22 @@ fn handler() -> InputHandler {
 }
 
 #[test]
-fn press_then_quick_release_yields_short_press() {
+fn a_press_fires_the_moment_the_control_goes_down() {
+    // Not on release: that made every take start and stop late by
+    // however long the key was held.
     let mut input = handler();
     let t0 = Instant::now();
 
-    assert_eq!(input.update(true, t0), InputEvent::None);
+    assert_eq!(input.update(true, t0), InputEvent::Press);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(100)),
-        InputEvent::None
+        InputEvent::None,
+        "once per press, not every frame it's held"
     );
     assert_eq!(
         input.update(false, t0 + Duration::from_millis(150)),
-        InputEvent::ShortPress
+        InputEvent::None,
+        "and nothing more on release"
     );
 }
 
@@ -29,7 +33,7 @@ fn holding_past_threshold_yields_long_press_clear_while_still_held() {
     let mut input = handler();
     let t0 = Instant::now();
 
-    assert_eq!(input.update(true, t0), InputEvent::None);
+    assert_eq!(input.update(true, t0), InputEvent::Press);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(2001)),
         InputEvent::LongPressClear
@@ -37,7 +41,7 @@ fn holding_past_threshold_yields_long_press_clear_while_still_held() {
 }
 
 #[test]
-fn releasing_after_long_press_does_not_also_fire_short_press() {
+fn releasing_after_long_press_fires_nothing() {
     let mut input = handler();
     let t0 = Instant::now();
 
@@ -76,21 +80,28 @@ fn releasing_without_ever_pressing_yields_none() {
 }
 
 #[test]
-fn can_short_press_again_after_a_short_press() {
+fn can_press_again_after_a_press() {
+    let mut input = handler();
+    let t0 = Instant::now();
+
+    assert_eq!(input.update(true, t0), InputEvent::Press);
+    input.update(false, t0 + Duration::from_millis(100));
+
+    let t1 = t0 + Duration::from_millis(500);
+    assert_eq!(input.update(true, t1), InputEvent::Press);
+}
+
+#[test]
+fn a_hold_cut_short_of_the_threshold_does_not_clear() {
     let mut input = handler();
     let t0 = Instant::now();
 
     input.update(true, t0);
+    input.update(true, t0 + Duration::from_millis(1999));
     assert_eq!(
-        input.update(false, t0 + Duration::from_millis(100)),
-        InputEvent::ShortPress
-    );
-
-    let t1 = t0 + Duration::from_millis(500);
-    input.update(true, t1);
-    assert_eq!(
-        input.update(false, t1 + Duration::from_millis(100)),
-        InputEvent::ShortPress
+        input.update(false, t0 + Duration::from_millis(2001)),
+        InputEvent::None,
+        "released in time"
     );
 }
 
@@ -125,9 +136,5 @@ fn can_press_again_after_a_long_press_clear() {
     input.update(false, t0 + Duration::from_millis(2100));
 
     let t1 = t0 + Duration::from_secs(3);
-    input.update(true, t1);
-    assert_eq!(
-        input.update(false, t1 + Duration::from_millis(100)),
-        InputEvent::ShortPress
-    );
+    assert_eq!(input.update(true, t1), InputEvent::Press);
 }
