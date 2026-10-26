@@ -259,6 +259,8 @@ crates/
     src/audio/shared_control.rs  lock-free UI <-> audio thread relay
     src/audio/fault.rs        where a failing stream leaves word
     src/audio/click.rs        the metronome click, built per stream rate
+    src/audio/scheduler.rs    where a pattern's steps fall at a tempo,
+                              and a voice to play a one-shot on them
   looper-ui-egui/            rendering only - `render(ui, model) -> Action?`
     src/looper.rs             the looper screen
     src/settings.rs           the settings screen

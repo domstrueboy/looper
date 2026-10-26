@@ -225,7 +225,7 @@ the granted sample rate. No synthesis in the callback, no allocation,
 and no asset file to embed. Independent of everything else in v2; it
 only has to exist before step 5 plays it.
 
-### 4. Scheduler core - pure, testable
+### 4. Scheduler core - pure, testable - done
 
 (sample position, BPM, pattern) -> events -> voices. One scheduler
 that the metronome is a preset of, and the drum machine is a richer
