@@ -496,3 +496,48 @@ fn a_count_in_called_off_leaves_redo_alone() {
 
     assert!(mirror.can_redo());
 }
+
+// --- The saved tempo --------------------------------------------------------
+
+#[test]
+fn the_beat_count_reads_back() {
+    let dir = temp_dir("mirror-beats");
+    save_beats(&dir, 12).expect("written");
+    assert_eq!(load_beats(&dir), Some(12));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn saving_the_layers_leaves_the_tempo_alone() {
+    // It's written on its own, once known - a layer save after it, for
+    // an overdub, mustn't take it away.
+    let dir = temp_dir("mirror-beats-layers");
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    save_beats(&dir, 4).expect("written");
+
+    mirror.save(&dir).expect("saved");
+
+    assert_eq!(load_beats(&dir), Some(4));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn deleting_the_loop_takes_the_tempo_with_it() {
+    let dir = temp_dir("mirror-beats-delete");
+    save_beats(&dir, 4).expect("written");
+    delete(&dir);
+    assert_eq!(load_beats(&dir), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_tempo_file_that_does_not_read_is_no_tempo() {
+    let dir = temp_dir("mirror-beats-bad");
+    std::fs::create_dir_all(&dir).unwrap();
+    for text in ["beats = \"twelve\"\n", "beats = 0\n", "not toml at all"] {
+        std::fs::write(dir.join("tempo.toml"), text).unwrap();
+        assert_eq!(load_beats(&dir), None, "{text}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

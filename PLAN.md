@@ -242,7 +242,7 @@ the output buffer. Driven by `play_pos` from `SharedControl` - clicks on
 beat boundaries. Toggle key (`M`) + UI indicator in looper screen.
 Clicks during `Arming` state (count-in).
 
-### 6. Loop/bar-grid sync - mini
+### 6. Loop/bar-grid sync - mini - done
 
 Two ways to get a loop that fits a bar grid, picked by whether the
 metronome is on:
@@ -275,8 +275,9 @@ Split four ways:
 - **6c. Tempo from the loop - done.** With the metronome off, the BPM is
   worked out from the loop's length, with ½ / 2× to correct it. While a
   loop exists it sets the tempo either way.
-- **6d. Save the tempo.** The BPM and bar count beside the saved loop,
-  so a restored loop keeps its grid.
+- **6d. Save the tempo - done.** The beat count beside the saved loop
+  (`tempo.toml`), so a restored loop keeps its tempo; the BPM follows
+  from it and the length.
 
 ### 7. Drum machine - extended
 

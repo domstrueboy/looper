@@ -32,7 +32,9 @@ impl LoopTempo {
         Self::with_beats(bars * beats_per_bar, loop_len, sample_rate)
     }
 
-    fn with_beats(beats: u32, loop_len: usize, sample_rate: u32) -> Self {
+    /// A loop's beat count, as saved beside it - the tempo comes back
+    /// from it and the length exactly.
+    pub fn with_beats(beats: u32, loop_len: usize, sample_rate: u32) -> Self {
         Self {
             beats,
             bpm: f64::from(beats) * 60.0 * f64::from(sample_rate) / loop_len.max(1) as f64,

@@ -179,7 +179,9 @@ out, so even a crash won't take it with it.
 
 The layers are ordinary WAV files, one per layer, next to the settings
 file (`%APPDATA%\looper-pedal\loop\` on Windows) - so you can open
-them in any audio editor, or delete them to start clean.
+them in any audio editor, or delete them to start clean. The loop's
+tempo is kept beside them too, so it comes back exactly as it was - a
+halved or doubled one included.
 
 Two things will make a saved loop *not* come back: changing the **sample
 rate**, since the recording no longer matches the device, and lowering

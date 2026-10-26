@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use ringbuf::HeapCons;
+use serde::{Deserialize, Serialize};
 use ringbuf::traits::Consumer;
 
 use crate::state_machine::LoopState;
@@ -10,6 +11,8 @@ use crate::wav;
 /// More layers than any config allows, so a stale file from a bigger
 /// setting still gets cleaned up.
 const MAX_SAVED_LAYERS: usize = 16;
+
+const TEMPO_FILE: &str = "tempo.toml";
 
 /// One recorded take: where in the loop it began, and what was played.
 /// Saved layers come back in this shape too, already laid out from
@@ -202,8 +205,9 @@ impl LoopMirror {
         std::fs::create_dir_all(directory)
             .map_err(|e| format!("creating {}: {e}", directory.display()))?;
         // Clear first: a shorter loop must not leave layers of a longer
-        // one behind to be loaded back alongside it.
-        delete(directory);
+        // one behind to be loaded back alongside it. The tempo stays -
+        // it's saved on its own, when it's known.
+        delete_layers(directory);
 
         for (index, samples) in self.layers().iter().enumerate() {
             wav::write(&layer_path(directory, index), samples, self.sample_rate)?;
@@ -300,10 +304,41 @@ pub fn load(directory: &Path, settings: &AppConfig) -> Vec<Vec<f32>> {
     layers
 }
 
+/// The whole saved loop, tempo included.
 pub fn delete(directory: &Path) {
+    delete_layers(directory);
+    let _ = std::fs::remove_file(directory.join(TEMPO_FILE));
+}
+
+fn delete_layers(directory: &Path) {
     for index in 0..MAX_SAVED_LAYERS {
         let _ = std::fs::remove_file(layer_path(directory, index));
     }
+}
+
+/// How many beats the saved loop holds. Only the beats: the tempo follows
+/// from them and the loop's length exactly, and saving it as well would
+/// only let the two disagree.
+#[derive(Serialize, Deserialize)]
+struct SavedTempo {
+    beats: u32,
+}
+
+pub fn save_beats(directory: &Path, beats: u32) -> Result<(), String> {
+    std::fs::create_dir_all(directory)
+        .map_err(|e| format!("creating {}: {e}", directory.display()))?;
+    let text = toml::to_string(&SavedTempo { beats })
+        .map_err(|e| format!("serializing the tempo: {e}"))?;
+    let path = directory.join(TEMPO_FILE);
+    std::fs::write(&path, text).map_err(|e| format!("writing {}: {e}", path.display()))
+}
+
+/// `None` for no file, or one that doesn't read - the tempo is guessed
+/// again then, which is what a loop saved before this existed gets too.
+pub fn load_beats(directory: &Path) -> Option<u32> {
+    let text = std::fs::read_to_string(directory.join(TEMPO_FILE)).ok()?;
+    let saved: SavedTempo = toml::from_str(&text).ok()?;
+    (saved.beats > 0).then_some(saved.beats)
 }
 
 /// Numbered from 1, so the filenames read the way the layer counter does.

@@ -844,3 +844,67 @@ fn a_saved_loop_comes_back_with_a_tempo() {
     assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn a_halved_tempo_survives_a_restart() {
+    // Guessed at 120, halved to 60: a restart must not guess 120 again.
+    let (mut looper, _driver, dir, _) = free_take("looper-tempo-saved", 88_200);
+    looper.halve_tempo();
+    drop(looper);
+
+    let restored = reopen(&dir);
+
+    assert!((restored.tempo() - 60.0).abs() < 0.01, "got {}", restored.tempo());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_loop_played_to_the_click_comes_back_at_the_clicks_tempo() {
+    // Three bars at 120 is six seconds - which a guess would call 80.
+    let (mut looper, driver, dir, at) = record_against_the_click("looper-tempo-click-saved", 3 * BAR);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    drop(looper);
+
+    let restored = reopen(&dir);
+
+    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_saved_tempo_the_click_cannot_play_is_guessed_instead() {
+    let (looper, _driver, dir, _) = free_take("looper-tempo-saved-bad", 88_200);
+    drop(looper);
+    // 1,000 beats in two seconds is 30,000 BPM.
+    loop_mirror::save_beats(&config::loop_dir_in(&dir), 1_000).unwrap();
+
+    let restored = reopen(&dir);
+
+    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clearing_deletes_the_saved_tempo() {
+    let (mut looper, _driver, dir, at) = free_take("looper-tempo-saved-clear", 88_200);
+    assert!(loop_mirror::load_beats(&config::loop_dir_in(&dir)).is_some(), "saved");
+
+    looper.tick(true, at);
+    looper.tick(true, at + Duration::from_millis(600));
+
+    assert_eq!(loop_mirror::load_beats(&config::loop_dir_in(&dir)), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Opens a looper again on `dir`, as the next launch would, and lets it
+/// learn the restored loop's length.
+fn reopen(dir: &std::path::Path) -> LooperState {
+    let (backend, driver) = mock();
+    let backends = Backends::new(vec![Box::new(backend)]);
+    let mut looper =
+        LooperState::start_in(&backends, &settings(), dir.to_path_buf()).expect("opens");
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, Instant::now());
+    looper
+}

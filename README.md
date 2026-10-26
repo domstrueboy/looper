@@ -559,6 +559,14 @@ dependency. They're deliberately ordinary files: any editor opens them,
 and the eventual "export loop" feature becomes a copy rather than a
 converter.
 
+Beside them, `tempo.toml` holds the loop's beat count - only that: the
+tempo follows from it and the loop's length exactly, and saving the BPM
+too would only let the two disagree. It's written when the loop gets its
+tempo and after every ½ / 2×, and left alone by a layer save, which
+clears the WAVs first. Missing, unreadable, or naming a tempo the click
+can't play, and the tempo is guessed from the length instead - which is
+also what a loop saved before the file existed gets.
+
 Written whenever the loop changes, not on the way out, so a crash or a
 kill doesn't lose it. On launch the layers come back and the looper
 starts **Stopped** - the loop is there, silent until asked for. A saved
