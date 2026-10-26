@@ -8,7 +8,7 @@ use crate::audio::engine;
 use crate::audio::fault::StreamFault;
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
-use crate::config::{self, AppConfig, Mode};
+use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
@@ -34,6 +34,7 @@ pub struct LooperState {
     /// to the audio thread whole. Not saved: a loop reopens with every
     /// layer playing.
     muted_layers: u32,
+    metronome_on: bool,
     /// The loop as the UI thread sees it, which is the only copy that can
     /// be written to disk - see `LoopMirror`.
     mirror: LoopMirror,
@@ -75,7 +76,7 @@ impl LooperState {
         settings: &AppConfig,
         dir: PathBuf,
     ) -> Result<Self, String> {
-        let control = Arc::new(SharedControl::new(settings.volume_pct));
+        let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
         // Whatever was left from last time, if it still fits what's
         // configured now.
         let restored = loop_mirror::load(&config::loop_dir_in(&dir), settings);
@@ -106,6 +107,7 @@ impl LooperState {
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             max_layers: settings.max_layers as usize,
             muted_layers: 0,
+            metronome_on: false,
             mirror: LoopMirror::new(streams.captured, streams.sample_rate, restored),
             sample_rate: streams.sample_rate,
             config: settings.clone(),
@@ -182,6 +184,21 @@ impl LooperState {
         self.control.publish_state(self.state_machine.state());
     }
 
+    pub fn is_metronome_on(&self) -> bool {
+        self.metronome_on
+    }
+
+    pub fn metronome_bpm(&self) -> u32 {
+        self.config.metronome_bpm
+    }
+
+    /// Off at every start: a click nobody asked for, the moment the app
+    /// opens, is worse than pressing M.
+    pub fn toggle_metronome(&mut self) {
+        self.metronome_on = !self.metronome_on;
+        self.control.publish_metronome_on(self.metronome_on);
+    }
+
     pub fn is_layer_muted(&self, index: usize) -> bool {
         self.muted_layers & (1 << index) != 0
     }
@@ -253,8 +270,31 @@ impl LooperState {
         if self.config.mode == Mode::Mini {
             self.forget_mutes_from(0);
         }
+        self.save_config();
+    }
+
+    /// Nudges the tempo by `delta` BPM, within its range, while it
+    /// plays. Saved, so Settings and the next start agree with what was
+    /// last heard.
+    pub fn change_metronome_bpm(&mut self, delta: i32) {
+        let bpm = self
+            .config
+            .metronome_bpm
+            .saturating_add_signed(delta)
+            .clamp(*METRONOME_BPM_RANGE.start(), *METRONOME_BPM_RANGE.end());
+        if bpm == self.config.metronome_bpm {
+            return;
+        }
+        self.config.metronome_bpm = bpm;
+        self.control.publish_metronome_bpm(bpm);
+        self.save_config();
+    }
+
+    /// For the settings changed from this screen rather than from
+    /// Settings. Reported and otherwise ignored, like a failed loop save.
+    fn save_config(&self) {
         if let Err(err) = self.config.save_to(&config::config_path_in(&self.dir)) {
-            eprintln!("could not save the mode: {err}");
+            eprintln!("could not save the config: {err}");
         }
     }
 

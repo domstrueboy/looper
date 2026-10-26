@@ -535,3 +535,80 @@ fn a_long_press_clear_is_final() {
     assert!(!looper.can_redo_layer());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Metronome ------------------------------------------------------------
+
+/// Whether anything sounds in `frames` of output, with nothing played in.
+fn sounds(driver: &MockDriver, frames: usize) -> bool {
+    driver.cycle(&vec![0.0; frames]).iter().any(|&s| s != 0.0)
+}
+
+#[test]
+fn the_metronome_is_off_until_asked_for() {
+    let (mut looper, driver, dir) = start("looper-metronome", &settings());
+    assert!(!looper.is_metronome_on());
+    assert!(!sounds(&driver, 2_048), "silence");
+
+    looper.toggle_metronome();
+
+    assert!(sounds(&driver, 2_048), "a click, with no loop at all");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_metronome_counts_in_through_the_pre_roll() {
+    let (mut looper, driver, dir) = start("looper-metronome-arming", &settings());
+    looper.toggle_metronome();
+    sounds(&driver, 30_000);
+
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    // Restarted at beat one by the pre-roll, not half a beat on.
+    let out = driver.cycle(&vec![0.0; 512]);
+    assert_eq!(out[0], 0.0, "the click's first sample");
+    assert!(out[1..64].iter().any(|&s| s != 0.0), "a click right away");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn turning_the_metronome_off_silences_it() {
+    let (mut looper, driver, dir) = start("looper-metronome-off", &settings());
+    looper.toggle_metronome();
+    looper.toggle_metronome();
+    assert!(!sounds(&driver, 30_000));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_tempo_changes_live_and_is_saved() {
+    let (mut looper, driver, dir) = start("looper-tempo", &settings());
+    looper.toggle_metronome();
+
+    looper.change_metronome_bpm(180);
+
+    assert_eq!(looper.metronome_bpm(), 300);
+    let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
+    assert_eq!(saved.metronome_bpm, 300, "Settings and the next start agree");
+
+    // At 300 BPM a beat is 8,820 frames, so three clicks fit in 20,000
+    // where 120 BPM would fit one. Each click opens on a zero sample after
+    // silence, so count those openings.
+    let out = driver.cycle(&vec![0.0; 20_000]);
+    let left: Vec<f32> = out.iter().step_by(2).copied().collect();
+    let clicks = left
+        .windows(2)
+        .filter(|pair| pair[0] == 0.0 && pair[1] != 0.0)
+        .count();
+    assert!(clicks >= 3, "got {clicks}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_tempo_stays_inside_its_range() {
+    let (mut looper, _driver, dir) = start("looper-tempo-range", &settings());
+    looper.change_metronome_bpm(-1_000);
+    assert_eq!(looper.metronome_bpm(), *METRONOME_BPM_RANGE.start());
+    let _ = std::fs::remove_dir_all(&dir);
+}

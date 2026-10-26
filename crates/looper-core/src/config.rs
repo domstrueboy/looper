@@ -44,6 +44,11 @@ pub enum Mode {
     Extended,
 }
 
+/// Metronome tempo. Changed live from the looper screen as well as in
+/// Settings.
+pub const METRONOME_BPM_RANGE: RangeInclusive<u32> = 40..=300;
+pub const DEFAULT_METRONOME_BPM: u32 = 120;
+
 const CONFIG_DIR: &str = "looper-pedal";
 const CONFIG_FILE: &str = "config.toml";
 const LOOP_DIR: &str = "loop";
@@ -97,6 +102,9 @@ pub struct AppConfig {
     /// See `LONG_PRESS_MS_RANGE`.
     #[serde(default = "default_long_press_ms")]
     pub long_press_ms: u32,
+    /// See `METRONOME_BPM_RANGE`.
+    #[serde(default = "default_metronome_bpm")]
+    pub metronome_bpm: u32,
     /// See `Mode`. Switched from the looper screen, not from Settings.
     #[serde(default)]
     pub mode: Mode,
@@ -130,6 +138,10 @@ fn default_max_layers() -> u32 {
 
 fn default_long_press_ms() -> u32 {
     DEFAULT_LONG_PRESS_MS
+}
+
+fn default_metronome_bpm() -> u32 {
+    DEFAULT_METRONOME_BPM
 }
 
 impl AppConfig {
@@ -187,6 +199,7 @@ impl AppConfig {
         self.max_loop_secs = clamp_to(self.max_loop_secs, MAX_LOOP_SECS_RANGE);
         self.max_layers = clamp_to(self.max_layers, MAX_LAYERS_RANGE);
         self.long_press_ms = clamp_to(self.long_press_ms, LONG_PRESS_MS_RANGE);
+        self.metronome_bpm = clamp_to(self.metronome_bpm, METRONOME_BPM_RANGE);
         self
     }
 
@@ -231,6 +244,7 @@ impl Default for AppConfig {
             max_loop_secs: DEFAULT_MAX_LOOP_SECS,
             max_layers: DEFAULT_MAX_LAYERS,
             long_press_ms: DEFAULT_LONG_PRESS_MS,
+            metronome_bpm: DEFAULT_METRONOME_BPM,
             mode: Mode::Mini,
         }
     }

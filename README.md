@@ -261,6 +261,7 @@ crates/
     src/audio/click.rs        the metronome click, built per stream rate
     src/audio/scheduler.rs    where a pattern's steps fall at a tempo,
                               and a voice to play a one-shot on them
+    src/audio/metronome.rs    the click track, on its own count or the loop's
   looper-ui-egui/            rendering only - `render(ui, model) -> Action?`
     src/looper.rs             the looper screen
     src/settings.rs           the settings screen
@@ -375,6 +376,27 @@ earlier would make a hot stack permanently crunchy - and would take the
 live passthrough down with it, since the dry signal is added *after* the
 loop bus. This way turning the loop volume down still recovers it.
 
+### Metronome
+
+`M` toggles it through `SharedControl`. The tempo is `metronome_bpm`,
+and `,` / `.` (or the buttons beside the toggle) nudge it live: the UI
+thread publishes it through an atomic and saves the config, and the
+callback picks it up on its next block. A change keeps the click's place
+in the bar - its own count is rescaled to the new grid rather than left
+to land anywhere on it. The click is added to the output after
+the loop, so it plays over everything and isn't scaled by the loop
+volume. What it keeps time with depends on the state:
+
+| State | Clicks follow |
+|---|---|
+| Looping, Overdubbing | the loop's play position - beat one is the top of the loop |
+| Recording | its own count, restarted as the take opens, so the take starts on a click |
+| Arming | its own count, restarted as the pre-roll starts - the count-in |
+| Idle, Stopped | its own count |
+
+The click is heard through the output, like the loop, so a part played
+against it is recorded with the same alignment as an overdub.
+
 ### Recording alignment
 
 The dry passthrough carries `latency_ms` of headroom between the two
@@ -462,6 +484,7 @@ window opened.
 | `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched |
 | `preroll_ms` | 5000 | 0-5000 | wait before recording starts; 0 = off |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold clears the loop |
+| `metronome_bpm` | 120 | 40-300 | metronome tempo |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |
 | `max_loop_secs` | 60 | 10-120 | longest recordable loop |
 | `max_layers` | 4 | 1-8 | layers including the first recording |

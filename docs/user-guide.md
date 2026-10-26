@@ -127,6 +127,27 @@ A few things worth knowing:
   overall, turn **Loop volume** down in Settings - it covers the whole
   loop at once and leaves your live signal untouched.
 
+## Metronome
+
+Press **M** (or the **Metronome** button) to turn the click on or off.
+It's off every time the app starts.
+
+Change the tempo with the **−** and **+** buttons either side of it, or
+the **,** and **.** keys - one BPM a press, and holding a key keeps
+going. It changes straight away, even while the click is playing, and
+the app remembers it. The **Metronome** slider in Settings sets the same
+tempo.
+
+- With no loop, it simply clicks along at the tempo.
+- During the record delay it counts you in, starting from the first beat.
+- When recording starts, the click starts over, so the loop begins on a
+  beat. While the loop plays, the click starts over at the top of the
+  loop each time round.
+
+For now the loop is still exactly as long as you played it, so unless
+you stop recording right on a beat, the click will stumble once at the
+top of the loop. Making the loop snap to whole bars is coming next.
+
 ## Your loop is kept
 
 Closing the app doesn't lose the loop. Next time you open it, the loop is
@@ -209,4 +230,4 @@ Two messages can appear at the top of the looper screen:
 
 This is an early, minimal version. Not (yet) included: trimming the
 start/end of a loop, amp modeling (NAM),
-saving loops to a file, or a metronome/tempo sync.
+saving loops to a file, or loops that snap to the metronome's bars.

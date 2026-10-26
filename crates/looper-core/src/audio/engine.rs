@@ -14,6 +14,7 @@ use ringbuf::{
 };
 
 use super::loop_stack::LoopStack;
+use super::metronome::Metronome;
 use super::shared_control::SharedControl;
 use crate::config::AppConfig;
 use crate::state_machine::LoopState;
@@ -142,6 +143,7 @@ pub struct OutputPath {
     passthrough: HeapCons<f32>,
     recorder: HeapCons<f32>,
     stack: LoopStack,
+    metronome: Metronome,
     /// The callback only ever sees the published state, never the
     /// transitions, so layer bookkeeping keys off this changing - see
     /// `apply_state_change`.
@@ -166,6 +168,9 @@ impl OutputPath {
             let state = self.control.load_state();
             if state != self.previous_state {
                 apply_state_change(&mut self.stack, &self.control, self.previous_state, state);
+                if matches!(state, LoopState::Arming | LoopState::Recording) {
+                    self.metronome.restart();
+                }
                 self.previous_state = state;
             }
 
@@ -181,6 +186,9 @@ impl OutputPath {
                 self.stack.redo_layer();
             }
             self.stack.set_muted(self.control.muted_layers());
+            // Before mixing moves it on: the clicks in this block line
+            // up with the loop audio in it.
+            let loop_pos = self.stack.play_pos();
 
             match state {
                 LoopState::Recording => {
@@ -208,6 +216,18 @@ impl OutputPath {
                 // Arming captures nothing - the pre-roll is still
                 // counting down on the UI thread.
                 LoopState::Idle | LoopState::Stopped | LoopState::Arming => {}
+            }
+
+            // Onto the mix, after the loop volume: the click is level
+            // with the loop, not scaled by it.
+            if self.control.metronome_on() {
+                self.metronome.set_bpm(self.control.metronome_bpm());
+                if matches!(state, LoopState::Looping | LoopState::Overdubbing) {
+                    self.metronome
+                        .add_on_loop(dry, loop_pos, self.stack.recorded_len());
+                } else {
+                    self.metronome.add_free(dry);
+                }
             }
 
             duplicate_mono_to_channels(dry, self.channels, out);
@@ -300,6 +320,7 @@ pub fn build_audio_path(
             passthrough: passthrough_rx,
             recorder: recorder_rx,
             stack,
+            metronome: Metronome::new(sample_rate, settings.metronome_bpm),
             previous_state: LoopState::Idle,
         },
     };

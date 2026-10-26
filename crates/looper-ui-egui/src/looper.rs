@@ -8,6 +8,11 @@ use crate::indicator;
 /// centered without laying it out twice. Three of them fit the window.
 const CONTROL_BUTTON_SIZE: [f32; 2] = [88.0, 24.0];
 
+/// The metronome row: a toggle naming its tempo, between a slower and a
+/// faster button.
+const METRONOME_BUTTON_SIZE: [f32; 2] = [170.0, 24.0];
+const TEMPO_BUTTON_SIZE: [f32; 2] = [24.0, 24.0];
+
 /// Square, so up to eight fit across the window in one row.
 const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
 
@@ -39,7 +44,7 @@ fn readout(looper: &LooperState) -> indicator::Readout {
 
 pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
     let mut action = None;
-    let (overdub_pressed, remove_pressed, redo_pressed) = ui.ctx().input(|i| {
+    let (overdub_pressed, remove_pressed, redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
         (
             // Edge-triggered, unlike the main control: none of these has
             // a long-press meaning, so there's nothing to time. The
@@ -48,6 +53,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
             i.key_pressed(egui::Key::R),
             // Y, after Ctrl+Y: redo's key wherever there's an undo.
             i.key_pressed(egui::Key::Y),
+            i.key_pressed(egui::Key::M),
         )
     });
     let readout = readout(looper);
@@ -169,6 +175,8 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     },
                 );
 
+                metronome_row(ui, looper, metronome_pressed);
+
                 ui.colored_label(
                     egui::Color32::WHITE,
                     format!("Layers: {}/{}", looper.layer_count(), looper.max_layers()),
@@ -183,6 +191,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     looper.long_press_secs()
                 ));
                 ui.label("O: overdub  |  R: remove  |  Y: redo");
+                ui.label("M: metronome  |  , and . : tempo");
 
                 if looper.mode() == Mode::Extended {
                     extended_area(ui, looper);
@@ -191,6 +200,46 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
         });
 
     action
+}
+
+/// The metronome toggle, lit while on and naming its tempo, with a step
+/// slower and a step faster either side. Live - no trip to Settings.
+fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bool) {
+    // `,` and `.` sit under `<` and `>` on most layouts. Read as
+    // presses, so holding one repeats.
+    let (slower_pressed, faster_pressed) = ui
+        .ctx()
+        .input(|i| (i.key_pressed(egui::Key::Comma), i.key_pressed(egui::Key::Period)));
+
+    // Measured and allocated like the control row, to center it.
+    let spacing = ui.spacing().item_spacing.x;
+    let row = egui::vec2(
+        METRONOME_BUTTON_SIZE[0] + TEMPO_BUTTON_SIZE[0] * 2.0 + spacing * 2.0,
+        METRONOME_BUTTON_SIZE[1],
+    );
+    ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        let slower = ui
+            .add_sized(TEMPO_BUTTON_SIZE, egui::Button::new("−"))
+            .on_hover_text("Slower (,)");
+        if slower.clicked() || slower_pressed {
+            looper.change_metronome_bpm(-1);
+        }
+
+        let toggle = egui::Button::selectable(
+            looper.is_metronome_on(),
+            format!("Metronome {} BPM (M)", looper.metronome_bpm()),
+        );
+        if ui.add_sized(METRONOME_BUTTON_SIZE, toggle).clicked() || toggle_pressed {
+            looper.toggle_metronome();
+        }
+
+        let faster = ui
+            .add_sized(TEMPO_BUTTON_SIZE, egui::Button::new("+"))
+            .on_hover_text("Faster (.)");
+        if faster.clicked() || faster_pressed {
+            looper.change_metronome_bpm(1);
+        }
+    });
 }
 
 /// Both modes shown side by side, the current one selected, so the

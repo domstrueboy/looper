@@ -91,7 +91,7 @@ fn overdub_offset(latency_ms: u32) -> f32 {
         latency_ms,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct));
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     // Silence until the loop exists, so the layer underneath the overdub
@@ -191,7 +191,7 @@ fn no_delay_leaves_the_signal_alone() {
 #[test]
 fn the_recorder_and_the_mirror_are_fed_the_same_samples() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct));
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     control.publish_state(LoopState::Recording);
@@ -219,7 +219,7 @@ fn the_recorder_and_the_mirror_are_fed_the_same_samples() {
 fn a_callback_larger_than_the_monitoring_delay_is_not_dropped() {
     let settings = test_settings();
     let latency_frames = (settings.latency_ms as usize * TEST_RATE as usize) / 1_000;
-    let control = Arc::new(SharedControl::new(settings.volume_pct));
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     let frames = latency_frames * 4;
@@ -245,7 +245,7 @@ fn a_callback_larger_than_the_monitoring_delay_is_not_dropped() {
 fn the_input_and_output_channel_counts_are_independent() {
     let settings = test_settings();
     let latency_frames = (settings.latency_ms as usize * TEST_RATE as usize) / 1_000;
-    let control = Arc::new(SharedControl::new(settings.volume_pct));
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 2, &[]);
 
     // One mono channel in, two out, and long enough to push the

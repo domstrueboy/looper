@@ -13,6 +13,7 @@ fn saved() -> AppConfig {
         max_loop_secs: 90,
         max_layers: 6,
         long_press_ms: 1_500,
+        metronome_bpm: 92,
         mode: Mode::Extended,
     }
 }
@@ -31,6 +32,7 @@ fn a_round_trip_keeps_every_setting() {
     assert_eq!(read.max_loop_secs, 90);
     assert_eq!(read.max_layers, 6);
     assert_eq!(read.long_press_ms, 1_500);
+    assert_eq!(read.metronome_bpm, 92);
     assert_eq!(read.mode, Mode::Extended);
 }
 
@@ -57,6 +59,7 @@ fn settings_added_later_fall_back_to_their_defaults() {
     assert_eq!(config.max_loop_secs, DEFAULT_MAX_LOOP_SECS);
     assert_eq!(config.max_layers, DEFAULT_MAX_LAYERS);
     assert_eq!(config.long_press_ms, DEFAULT_LONG_PRESS_MS);
+    assert_eq!(config.metronome_bpm, DEFAULT_METRONOME_BPM);
     assert_eq!(config.mode, Mode::Mini);
 }
 
@@ -99,7 +102,8 @@ fn a_hand_edited_file_is_held_to_the_supported_ranges() {
          max_loop_secs = 7200\n\
          latency_ms = 0\n\
          volume_pct = 5000\n\
-         long_press_ms = 10\n",
+         long_press_ms = 10\n\
+         metronome_bpm = 1000\n",
     )
     .expect("still loads, just not as written");
 
@@ -108,6 +112,7 @@ fn a_hand_edited_file_is_held_to_the_supported_ranges() {
     assert_eq!(config.latency_ms, *LATENCY_MS_RANGE.start());
     assert_eq!(config.volume_pct, *VOLUME_PCT_RANGE.end());
     assert_eq!(config.long_press_ms, *LONG_PRESS_MS_RANGE.start());
+    assert_eq!(config.metronome_bpm, *METRONOME_BPM_RANGE.end());
 }
 
 #[test]
@@ -118,6 +123,7 @@ fn every_default_sits_inside_its_own_range() {
     assert!(MAX_LOOP_SECS_RANGE.contains(&DEFAULT_MAX_LOOP_SECS));
     assert!(MAX_LAYERS_RANGE.contains(&DEFAULT_MAX_LAYERS));
     assert!(LONG_PRESS_MS_RANGE.contains(&DEFAULT_LONG_PRESS_MS));
+    assert!(METRONOME_BPM_RANGE.contains(&DEFAULT_METRONOME_BPM));
 }
 
 #[test]

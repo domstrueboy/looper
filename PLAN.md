@@ -233,7 +233,7 @@ version of. No audio dependency - driven by sample position, tested
 against a mock clock. Simple first: 4/4 time, all beats equal, no
 accents.
 
-### 5. Metronome audio integration - mini
+### 5. Metronome audio integration - mini - done
 
 Add `metronome_bpm: u32` to `AppConfig` (range 40-300, default 120),
 landing here rather than earlier since this is the first step that
@@ -262,6 +262,12 @@ saved loop will want its BPM and bar count stored alongside it.
 
 This gates the drum machine: drums against a loop with no tempo will
 clash.
+
+The count-in also wants finishing here. Step 5 clicks through the
+pre-roll from beat one, but the pre-roll is still timed in milliseconds
+on the UI thread: it isn't a whole number of beats, and its end lands a
+frame or so off the beat. With the metronome on, it should run whole
+bars, and the take should open on the audio thread at the bar line.
 
 ### 7. Drum machine - extended
 

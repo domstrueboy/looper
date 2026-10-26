@@ -35,10 +35,14 @@ pub struct SharedControl {
     /// every layer's mute crosses in one atomic; `MAX_LAYERS_RANGE` tops
     /// out well inside 32.
     muted_layers: AtomicU32,
+    /// The metronome toggle, UI -> audio.
+    metronome_on: AtomicBool,
+    /// Its tempo, UI -> audio, live: nudged from the looper screen.
+    metronome_bpm: AtomicU32,
 }
 
 impl SharedControl {
-    pub fn new(volume_pct: u32) -> Self {
+    pub fn new(volume_pct: u32, metronome_bpm: u32) -> Self {
         Self {
             state: AtomicU8::new(LoopState::Idle as u8),
             clear_requested: AtomicBool::new(false),
@@ -53,7 +57,17 @@ impl SharedControl {
             output_underruns: AtomicUsize::new(0),
             volume_pct: AtomicU32::new(volume_pct),
             muted_layers: AtomicU32::new(0),
+            metronome_on: AtomicBool::new(false),
+            metronome_bpm: AtomicU32::new(metronome_bpm),
         }
+    }
+
+    pub fn publish_metronome_on(&self, on: bool) {
+        self.metronome_on.store(on, Ordering::Release);
+    }
+
+    pub fn publish_metronome_bpm(&self, bpm: u32) {
+        self.metronome_bpm.store(bpm, Ordering::Release);
     }
 
     pub fn publish_muted_layers(&self, muted: u32) {
@@ -147,6 +161,14 @@ impl SharedControl {
         self.loop_len.store(len, Ordering::Release);
         self.play_pos.store(pos, Ordering::Release);
         self.layer_count.store(layers, Ordering::Release);
+    }
+
+    pub(super) fn metronome_on(&self) -> bool {
+        self.metronome_on.load(Ordering::Acquire)
+    }
+
+    pub(super) fn metronome_bpm(&self) -> u32 {
+        self.metronome_bpm.load(Ordering::Acquire)
     }
 
     pub(super) fn muted_layers(&self) -> u32 {

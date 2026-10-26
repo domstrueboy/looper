@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
-    LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE, PREROLL_MS_RANGE,
-    VOLUME_PCT_RANGE,
+    LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, VOLUME_PCT_RANGE,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -199,6 +199,11 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
             .step_by(250.0)
             .text("Hold to clear")
             .custom_formatter(|ms, _| format!("{:.2} s", ms / 1000.0)),
+    );
+    ui.add(
+        egui::Slider::new(&mut settings.config.metronome_bpm, METRONOME_BPM_RANGE)
+            .text("Metronome")
+            .suffix(" BPM"),
     );
 
     ui.add_space(8.0);
