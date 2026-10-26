@@ -210,19 +210,20 @@ impl LooperState {
     }
 
     /// Drops the newest layer. Dropping the only one leaves nothing to
-    /// play, so that case is a clear and takes the state back to Idle
-    /// with it.
+    /// play, so the state goes back to Idle - but it isn't a clear: redo
+    /// can still bring the loop back.
     pub fn remove_last_layer(&mut self) {
         if !self.can_remove_layer() {
             return;
         }
-        if self.layer_count() <= 1 {
-            self.clear();
-        } else {
-            self.control.request_remove_layer();
-            self.forget_mutes_from(self.layer_count() - 1);
-            self.mirror.remove_last_layer();
-            self.save_loop();
+        let remaining = self.layer_count() - 1;
+        self.control.request_remove_layer();
+        self.forget_mutes_from(remaining);
+        self.mirror.remove_last_layer();
+        self.save_loop();
+        if remaining == 0 {
+            self.state_machine.clear();
+            self.control.publish_state(self.state_machine.state());
         }
     }
 
@@ -255,6 +256,31 @@ impl LooperState {
         if let Err(err) = self.config.save_to(&config::config_path_in(&self.dir)) {
             eprintln!("could not save the mode: {err}");
         }
+    }
+
+    /// Whether redo would do anything: a layer removed since the last
+    /// take, and nothing being recorded over it. Idle counts - removing
+    /// the only layer lands there.
+    pub fn can_redo_layer(&self) -> bool {
+        self.mirror.can_redo()
+            && matches!(
+                self.state(),
+                LoopState::Idle | LoopState::Looping | LoopState::Stopped
+            )
+    }
+
+    /// Brings back the layer "remove" dropped, unmuted. From Idle the
+    /// loop comes back stopped, like a saved one at startup. A long-press
+    /// clear is final: it forgets what redo could bring back.
+    pub fn redo_layer(&mut self) {
+        if !self.can_redo_layer() {
+            return;
+        }
+        self.state_machine.restore();
+        self.control.publish_state(self.state_machine.state());
+        self.control.request_redo_layer();
+        self.mirror.redo_layer();
+        self.save_loop();
     }
 
     pub fn set_button_held(&mut self, held: bool) {

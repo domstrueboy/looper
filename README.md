@@ -321,8 +321,20 @@ main control always means "stop" when something is playing.
 
 The first recording fixes the loop length; each overdub adds another
 layer on top, and playback is their sum. `max_layers` of them can be
-stacked, four by default, and the newest can be dropped again ("Remove
-last") - dropping the only one is the same thing as clearing.
+stacked, four by default, and the newest can be dropped again
+("Remove"). Dropping the only one takes the state back to `Idle`, but
+isn't a clear: redo can still bring it back.
+
+"Redo" brings a dropped layer back. It costs almost nothing: removing
+only lowers the stack's count, and the samples stay in the buffer until
+the next take is recorded into that slot. So the stack counts how many
+layers above `count` are still intact, and forgets them all the moment a
+take begins. Removing the last layer stashes the loop length, so the
+stack reads as empty until a redo restores it; the loop returns
+`Stopped`, as a saved one does at startup. A long-press clear stays
+final. The mirror keeps the dropped takes for the same window, so
+a redone layer is saved again; the two are driven by the same events and
+a test holds each to the same rule. Not across restarts.
 
 Each layer is a full-length pre-allocated buffer, but an overdub can
 start anywhere in the loop and be stopped early, so a layer only counts

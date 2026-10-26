@@ -324,3 +324,96 @@ fn muting_every_layer_keeps_the_loop_running() {
     assert_eq!(out, [0.0; 2]);
     assert_eq!(stack.play_pos(), 2);
 }
+
+/// A first layer of `[1, 2]` and an overdub of `[10, 20]` over all of it.
+fn with_two_layers() -> LoopStack {
+    let mut stack = with_first_layer(&[1.0, 2.0]);
+    stack.begin_overdub();
+    let mut out = [0.0; 2];
+    stack.read_mixed_with_overdub(&mut out, &[10.0, 20.0], 100);
+    stack.finish_overdub();
+    stack
+}
+
+#[test]
+fn redo_brings_back_the_removed_layer_as_it_was() {
+    let mut stack = with_two_layers();
+    stack.remove_last_layer();
+
+    assert!(stack.redo_layer());
+
+    assert_eq!(stack.layer_count(), 2);
+    let mut out = [0.0; 2];
+    stack.read_mixed(&mut out, 100);
+    assert_eq!(out, [11.0, 22.0]);
+}
+
+#[test]
+fn several_removes_come_back_newest_first() {
+    let mut stack = with_two_layers();
+    stack.begin_overdub();
+    let mut out = [0.0; 2];
+    stack.read_mixed_with_overdub(&mut out, &[100.0, 200.0], 100);
+    stack.finish_overdub();
+    stack.remove_last_layer();
+    stack.remove_last_layer();
+
+    assert!(stack.redo_layer());
+    let mut one = [0.0; 2];
+    stack.read_mixed(&mut one, 100);
+    assert_eq!(one, [11.0, 22.0], "the second layer first");
+
+    assert!(stack.redo_layer());
+    assert!(!stack.redo_layer(), "and nothing past what was removed");
+    assert_eq!(stack.layer_count(), 3);
+}
+
+#[test]
+fn a_new_take_forgets_what_redo_could_bring_back() {
+    // It's recorded into the removed layer's slot.
+    let mut stack = with_two_layers();
+    stack.remove_last_layer();
+    stack.begin_overdub();
+    stack.finish_overdub();
+
+    assert!(!stack.redo_layer());
+}
+
+#[test]
+fn nothing_removed_means_nothing_to_redo() {
+    let mut stack = with_two_layers();
+    assert!(!stack.redo_layer());
+    assert_eq!(stack.layer_count(), 2);
+}
+
+#[test]
+fn removing_the_only_layer_can_be_redone_with_its_length() {
+    let mut stack = with_first_layer(&[1.0, 2.0, 3.0]);
+    stack.remove_last_layer();
+    assert!(stack.is_empty(), "nothing to play meanwhile");
+
+    assert!(stack.redo_layer());
+
+    assert_eq!(stack.recorded_len(), 3);
+    let mut out = [0.0; 4];
+    stack.read_mixed(&mut out, 100);
+    assert_eq!(out, [1.0, 2.0, 3.0, 1.0], "from the top");
+}
+
+#[test]
+fn a_new_first_take_forgets_a_removed_loop() {
+    let mut stack = with_first_layer(&[1.0, 2.0]);
+    stack.remove_last_layer();
+    stack.begin_first_layer();
+    stack.finish_first_layer();
+
+    assert!(!stack.redo_layer());
+}
+
+#[test]
+fn a_clear_cannot_be_redone() {
+    let mut stack = with_two_layers();
+    stack.remove_last_layer();
+    stack.clear();
+    assert!(!stack.redo_layer());
+}

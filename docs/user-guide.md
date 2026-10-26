@@ -110,9 +110,15 @@ A few things worth knowing:
   erasing what you already put down.
 - You don't have to start at the top of the loop. Start wherever you
   like, stop whenever you like - only the part you played is recorded.
-- **Remove last** drops the most recent layer if you're not happy with
+- **Remove** (**R**) drops the most recent layer if you're not happy with
   it, leaving the others playing. Dropping the only remaining layer
-  clears the loop.
+  leaves nothing to play, so the looper goes back to waiting for a new
+  recording.
+- **Redo** (**Y**) brings a removed layer back, exactly as it was. Remove
+  several and they come back newest first. Even the very last layer can
+  come back - the loop returns stopped, so press to play it. This works
+  until you record something new or clear the loop with a long hold -
+  and not after the app is closed.
 - Pressing the main control (space or the round button) while
   overdubbing stops playback, exactly as it does while looping. The
   layer you were recording is kept.

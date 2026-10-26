@@ -9,6 +9,7 @@ pub struct SharedControl {
     state: AtomicU8,
     clear_requested: AtomicBool,
     remove_layer_requested: AtomicBool,
+    redo_layer_requested: AtomicBool,
     // Telemetry the other way, audio -> UI: duration, progress bar, and
     // how many layers are stacked up.
     loop_len: AtomicUsize,
@@ -42,6 +43,7 @@ impl SharedControl {
             state: AtomicU8::new(LoopState::Idle as u8),
             clear_requested: AtomicBool::new(false),
             remove_layer_requested: AtomicBool::new(false),
+            redo_layer_requested: AtomicBool::new(false),
             loop_len: AtomicUsize::new(0),
             play_pos: AtomicUsize::new(0),
             layer_count: AtomicUsize::new(0),
@@ -69,6 +71,12 @@ impl SharedControl {
     /// Drops the newest layer. One-shot, like `request_clear`.
     pub fn request_remove_layer(&self) {
         self.remove_layer_requested.store(true, Ordering::Release);
+    }
+
+    /// Brings back the layer last removed. One-shot, like
+    /// `request_remove_layer`.
+    pub fn request_redo_layer(&self) {
+        self.redo_layer_requested.store(true, Ordering::Release);
     }
 
     pub fn layer_count(&self) -> usize {
@@ -121,6 +129,10 @@ impl SharedControl {
 
     pub(super) fn take_remove_layer_request(&self) -> bool {
         self.remove_layer_requested.swap(false, Ordering::AcqRel)
+    }
+
+    pub(super) fn take_redo_layer_request(&self) -> bool {
+        self.redo_layer_requested.swap(false, Ordering::AcqRel)
     }
 
     pub(super) fn publish_take_start(&self, pos: usize) {

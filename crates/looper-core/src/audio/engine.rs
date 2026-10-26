@@ -175,6 +175,11 @@ impl OutputPath {
             if self.control.take_remove_layer_request() {
                 self.stack.remove_last_layer();
             }
+            // After the remove: both on one callback means remove, then
+            // bring back, in the order they were asked for.
+            if self.control.take_redo_layer_request() {
+                self.stack.redo_layer();
+            }
             self.stack.set_muted(self.control.muted_layers());
 
             match state {

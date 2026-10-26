@@ -32,6 +32,9 @@ pub struct LoopMirror {
     previous_state: LoopState,
     open_take: Option<Vec<f32>>,
     finished: Vec<Take>,
+    /// Takes removed since the last one was recorded, newest last - what
+    /// redo can bring back. Mirrors the layer stack's own count of them.
+    removed: Vec<Take>,
     /// Taken from the audio thread's telemetry rather than from how many
     /// samples arrived here, a frame after a take ends - see `tick`.
     loop_len: usize,
@@ -56,6 +59,7 @@ impl LoopMirror {
                 .into_iter()
                 .map(|samples| Take { start: 0, samples })
                 .collect(),
+            removed: Vec::new(),
             loop_len,
             sample_rate,
             save_pending: false,
@@ -110,6 +114,8 @@ impl LoopMirror {
         );
 
         if capturing && !was_capturing {
+            // The new take is recorded into the slot a removed one held.
+            self.removed.clear();
             if state == LoopState::Recording {
                 // The first take of a new loop replaces everything -
                 // including any doubt about what the old one held.
@@ -147,11 +153,24 @@ impl LoopMirror {
     }
 
     pub fn remove_last_layer(&mut self) {
-        self.finished.pop();
+        if let Some(take) = self.finished.pop() {
+            self.removed.push(take);
+        }
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.removed.is_empty()
+    }
+
+    pub fn redo_layer(&mut self) {
+        if let Some(take) = self.removed.pop() {
+            self.finished.push(take);
+        }
     }
 
     pub fn clear(&mut self) {
         self.finished.clear();
+        self.removed.clear();
         self.open_take = None;
         self.loop_len = 0;
         self.save_pending = false;

@@ -4,9 +4,9 @@ use looper_core::state_machine::LoopState;
 use looper_core::looper::LooperState;
 use crate::indicator;
 
-/// Both secondary buttons share a size, so the row can be measured and
-/// centered without laying it out twice.
-const CONTROL_BUTTON_SIZE: [f32; 2] = [118.0, 24.0];
+/// The secondary buttons share a size, so the row can be measured and
+/// centered without laying it out twice. Three of them fit the window.
+const CONTROL_BUTTON_SIZE: [f32; 2] = [88.0, 24.0];
 
 /// Square, so up to eight fit across the window in one row.
 const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
@@ -39,13 +39,15 @@ fn readout(looper: &LooperState) -> indicator::Readout {
 
 pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
     let mut action = None;
-    let (overdub_pressed, remove_pressed) = ui.ctx().input(|i| {
+    let (overdub_pressed, remove_pressed, redo_pressed) = ui.ctx().input(|i| {
         (
-            // Edge-triggered, unlike the main control: neither of these
-            // has a long-press meaning, so there's nothing to time. The
+            // Edge-triggered, unlike the main control: none of these has
+            // a long-press meaning, so there's nothing to time. The
             // spacebar is read where the looper is ticked, in `main.rs`.
             i.key_pressed(egui::Key::O),
             i.key_pressed(egui::Key::R),
+            // Y, after Ctrl+Y: redo's key wherever there's an undo.
+            i.key_pressed(egui::Key::Y),
         )
     });
     let readout = readout(looper);
@@ -119,14 +121,14 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // centering layout above can center it - a plain
                 // `horizontal` would take the full width and sit left.
                 let row = egui::vec2(
-                    CONTROL_BUTTON_SIZE[0] * 2.0 + ui.spacing().item_spacing.x,
+                    CONTROL_BUTTON_SIZE[0] * 3.0 + ui.spacing().item_spacing.x * 2.0,
                     CONTROL_BUTTON_SIZE[1],
                 );
                 ui.allocate_ui_with_layout(
                     row,
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
-                        // Both name their key, like the hint lines do.
+                        // Each names its key, like the hint lines do.
                         // Kept short deliberately: the buttons are a
                         // fixed width so the row can be centered, and
                         // "Finish overdub (O)" doesn't fit in it.
@@ -147,15 +149,22 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
 
                         let remove_clicked = ui
                             .add_enabled_ui(looper.can_remove_layer(), |ui| {
-                                ui.add_sized(
-                                    CONTROL_BUTTON_SIZE,
-                                    egui::Button::new("Remove last (R)"),
-                                )
+                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Remove (R)"))
                             })
                             .inner
                             .clicked();
                         if remove_clicked || remove_pressed {
                             looper.remove_last_layer();
+                        }
+
+                        let redo_clicked = ui
+                            .add_enabled_ui(looper.can_redo_layer(), |ui| {
+                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Redo (Y)"))
+                            })
+                            .inner
+                            .clicked();
+                        if redo_clicked || redo_pressed {
+                            looper.redo_layer();
                         }
                     },
                 );
@@ -173,7 +182,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     "Hold either {:.1}s to clear",
                     looper.long_press_secs()
                 ));
-                ui.label("O: overdub   |   R: remove last");
+                ui.label("O: overdub  |  R: remove  |  Y: redo");
 
                 if looper.mode() == Mode::Extended {
                     extended_area(ui, looper);

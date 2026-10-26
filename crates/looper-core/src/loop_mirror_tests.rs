@@ -404,3 +404,30 @@ fn a_first_take_that_captured_nothing_clears_the_saved_loop() {
 
     let _ = std::fs::remove_dir_all(&directory);
 }
+
+#[test]
+fn redo_puts_the_removed_take_back_on_top() {
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[3, 4]), 2, 0);
+
+    mirror.remove_last_layer();
+    assert!(mirror.can_redo());
+    mirror.redo_layer();
+
+    assert!(!mirror.can_redo());
+    assert_eq!(mirror.layers(), vec![s(&[1, 2]), s(&[3, 4])]);
+}
+
+#[test]
+fn a_new_take_forgets_what_redo_could_bring_back() {
+    // The layer stack forgets at the same moment; the two must agree.
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[3, 4]), 2, 0);
+    mirror.remove_last_layer();
+
+    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[5, 6]), 2, 0);
+
+    assert!(!mirror.can_redo());
+}

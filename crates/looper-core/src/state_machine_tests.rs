@@ -168,3 +168,18 @@ fn can_record_again_after_clear() {
     sm.press();
     assert_eq!(sm.state(), LoopState::Recording);
 }
+
+#[test]
+fn restore_brings_an_idle_machine_back_stopped() {
+    let mut sm = LoopStateMachine::new();
+    sm.restore();
+    assert_eq!(sm.state(), LoopState::Stopped);
+}
+
+#[test]
+fn restore_leaves_a_playing_loop_alone() {
+    let mut sm = LoopStateMachine::stopped();
+    sm.press();
+    sm.restore();
+    assert_eq!(sm.state(), LoopState::Looping);
+}

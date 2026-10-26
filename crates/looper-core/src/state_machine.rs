@@ -84,6 +84,14 @@ impl LoopStateMachine {
         };
     }
 
+    /// Redo brought a loop back from nothing: it exists again, stopped,
+    /// the way a saved one comes back at startup.
+    pub fn restore(&mut self) {
+        if self.state == LoopState::Idle {
+            self.state = LoopState::Stopped;
+        }
+    }
+
     /// Long-press: clears the loop from any state, back to Idle. How long
     /// a hold that takes is `long_press_ms`, and `InputHandler`'s to
     /// measure.

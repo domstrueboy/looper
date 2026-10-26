@@ -209,7 +209,7 @@ of "record/mute/delete-able" not built. Finishes v1 step 2's debt and
 unblocks the mic channel (per-source monitoring requires per-source
 mute).
 
-### 2. Redo - mini
+### 2. Redo - mini - done
 
 Brings back the layer "remove last" dropped. Close to free: removing
 only lowers the layer count, so the audio stays in the buffer until the

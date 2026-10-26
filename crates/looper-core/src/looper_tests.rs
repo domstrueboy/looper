@@ -343,9 +343,13 @@ fn two_layers(name: &str) -> (LooperState, MockDriver, PathBuf, Instant) {
     press(&mut looper, at, at);
     driver.cycle(&vec![0.0; 512]);
 
+    // Ticked between the steps, as frames would: the UI thread's copy of
+    // the loop only sees a take it's ticked through.
     looper.toggle_overdub();
+    looper.tick(false, at);
     driver.cycle(&vec![0.25; 512]);
     looper.toggle_overdub();
+    looper.tick(false, at);
     driver.cycle(&vec![0.0; 512]);
     looper.tick(false, at);
     assert_eq!(looper.layer_count(), 2, "set up");
@@ -445,5 +449,89 @@ fn going_back_to_mini_unmutes_every_layer() {
 
     assert_eq!(looper.mode(), Mode::Mini);
     assert!(!looper.is_layer_muted(0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- Redo -----------------------------------------------------------------
+
+#[test]
+fn redo_brings_a_removed_layer_back_and_saves_it() {
+    let (mut looper, driver, dir, at) = two_layers("looper-redo");
+    looper.remove_last_layer();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.layer_count(), 1);
+    assert!(looper.can_redo_layer());
+
+    looper.redo_layer();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    assert_eq!(looper.layer_count(), 2, "back on the audio thread");
+    assert!(!looper.can_redo_layer());
+    assert!(
+        config::loop_dir_in(&dir).join("layer-2.wav").exists(),
+        "and on disk"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn an_overdub_after_a_remove_ends_the_chance_to_redo() {
+    let (mut looper, driver, dir, at) = two_layers("looper-redo-overdub");
+    looper.remove_last_layer();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    looper.toggle_overdub();
+    looper.tick(false, at);
+    driver.cycle(&vec![0.25; 512]);
+    looper.toggle_overdub();
+    looper.tick(false, at);
+
+    assert!(!looper.can_redo_layer());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn removing_the_only_layer_goes_idle_and_redo_brings_it_back_stopped() {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start("looper-redo-only", &no_preroll);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.5; 2_048]);
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    looper.remove_last_layer();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.state(), LoopState::Idle);
+    assert_eq!(looper.layer_count(), 0);
+
+    looper.redo_layer();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped, "there, but silent");
+    assert_eq!(looper.layer_count(), 1);
+    assert!(config::loop_dir_in(&dir).join("layer-1.wav").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_long_press_clear_is_final() {
+    let (mut looper, _driver, dir, at) = two_layers("looper-redo-clear");
+    looper.remove_last_layer();
+
+    looper.tick(true, at);
+    looper.tick(true, at + Duration::from_millis(600));
+    assert_eq!(looper.state(), LoopState::Idle, "cleared");
+
+    assert!(!looper.can_redo_layer());
     let _ = std::fs::remove_dir_all(&dir);
 }
