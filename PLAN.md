@@ -22,7 +22,12 @@ surviving restarts as WAV layers, an app icon, no console window in
 release builds, technical + user docs, and a Windows CI build/release
 pipeline.
 
-Since then the app has been split into four crates - `looper-hal`
+**v2 is under way** - steps 0-6 done: the mini/extended switch, layer
+mute, redo, the metronome with live tempo, loops snapped to bars, a
+one-bar count-in that opens the take on the bar line, and a tempo for
+every loop, saved with it. Next is step 7.
+
+Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
 `looper-app` (the shell) - the core moved to `f32`, and a second backend
 (WASAPI) landed beside ASIO. See README's architecture section. What that
@@ -37,8 +42,6 @@ bought, concretely:
   audio SDK, on any platform.
 - **The looper screen is testable**, on a mock backend, which closed a
   post-v1 item that had stood since the review.
-
-Next is v2.
 
 ## Ground rules
 
@@ -142,16 +145,28 @@ Worth settling before the work they block starts.
 - Trim loop start/end, and the waveform rendering it needs anyway
 - Export / save loops to a chosen file - reuses v1 step 5's WAV writer.
   Could grow into numbered memory slots, several saved loops to pick
-  from, as on the NUX Dual Loop Stereo.
+  from (the NUX has 99), with save and delete.
 - **A/B song parts** (extended) - two loops, switched between for verse
-  and chorus, as on the NUX Dual Loop Stereo. Each part would want its
-  own layer stack, so memory doubles; worth doing after the mic channel
-  has shown what a second track costs.
-- **Auto-record** (mini) - recording starts when the input crosses a
-  level, instead of after the pre-roll timer. An alternative start for
-  the same `Arming` state.
-- NAM model loading, in the insert-effect stage the signal path leaves
-  room for between input and the mix
+  and chorus, as on the NUX Dual Loop Stereo. Sharing one tempo, and a
+  switch *waits for the end of the current loop* rather than cutting it
+  off. Each part would want its own layer stack, so memory doubles, and
+  its own drum groove; worth doing after the mic channel has shown what
+  a second track costs. The NUX's other mode, parallel tracks muted in
+  and out for quiet sections, is mostly what layer mute already does.
+- **Footswitch control** - the NUX ships a two-button pedal, because
+  hands belong on the guitar. For a desktop app that means MIDI foot
+  controllers (a dependency, so a deliberate choice). Pedals that send
+  key presses work today, mapped to Space, O, R and the rest.
+- **Split output** - loop and guitar on the left channel, drums or click
+  on the right, so the click can go to headphones only, or each to its
+  own amp. The output is mono duplicated to every channel today.
+- **Effects** - an insert-effect stage between input and the mix, which
+  the signal path leaves room for: NAM model loading, and the NUX's
+  looper-shaped set - an **octave down** to play a bass part on the
+  guitar, a **boost** for soloing over the loop, **reverb** on the drums,
+  and a cabinet simulation for going straight to a mixer.
+- **Import a backing track** - a WAV as a loop to play over, beside
+  export and memory slots.
 - Tuner - pitch detection on a decimated copy of the input, analysed on
   a background thread or per UI frame. Never inside the callback: FFT /
   autocorrelation cost is unbounded relative to the audio budget.
@@ -191,8 +206,13 @@ check.
 
 | Mode | Has |
 |---|---|
-| mini | record/loop/overdub/redo, metronome, bar-grid sync |
+| mini | record/loop/overdub/redo, metronome, bar-grid sync, pedal feel, tempo and levels |
 | extended | mini + layer list with mute, drum machine, mic channel |
+
+Steps 7 and 8 come from the NUX Dual Loop Stereo's manual and a review
+of it, whose first complaint about loopers in general - "why does the
+loop start when you *release* the pedal?" - turned out to be true of
+this one.
 
 ### 0. Mini/extended switch - done
 
@@ -279,17 +299,58 @@ Split four ways:
   (`tempo.toml`), so a restored loop keeps its tempo; the BPM follows
   from it and the length.
 
-### 7. Drum machine - extended
+### 7. Pedal feel - mini
 
-One-shot samples plus an editable step pattern, not pre-recorded loops
-(whose tempo is baked in, so changing BPM would mean resampling). A
-small fixed-size polyphonic voice pool, pre-allocated to stay RT-safe.
-Kits load on the UI thread and are handed to the audio thread the way
-v1 step 5 hands over a restored loop, never loaded in the callback; embed
-one small CC0 kit via `include_bytes!` to keep the single-exe property,
-with an optional folder next to the config for more.
+How the main control behaves, as settings rather than one fixed way.
 
-### 8. Mic channel - extended
+- **7a. Act on press-down.** A short press fires on *release* today
+  (`input.rs`), so every record start and stop lands as late as the
+  key or foot stayed down - typically 100-200 ms, now the largest timing
+  error left. Fire on the press instead, and keep the hold as an extra
+  on top: a long hold still clears, and a clear wipes whatever the press
+  had just started, so nothing is lost by acting early.
+- **7b. Dub mode.** REC -> PLAY -> DUB (today's) or REC -> DUB -> PLAY:
+  stopping the first take goes straight into an overdub, for recording
+  the second part without waiting a pass.
+- **7c. Record start mode.** One setting: *Instant*, *Delay* (today's
+  Record delay), *Count-in* (today's, one bar) or *Detect* - recording
+  opens when the input crosses a level, so you don't have to press and
+  play at once. Replaces the implicit "metronome on means count-in": a
+  count-in is right at home and wrong on stage. Detect can't start a
+  part on an off-beat, which is why it's a choice, not the default.
+- **7d. Stop mode.** *Immediate* (today's), *At the loop end*, or *Fade
+  out* over a few seconds. Fades scale the loop bus on the audio thread;
+  the loop end is known to the frame.
+
+### 8. Tempo and levels - mini
+
+- **8a. Tap tempo.** A key tapped two or more times sets the tempo from
+  the gaps between taps. Not while a loop sets the tempo.
+- **8b. Levels on screen.** Click volume (fixed at half scale today)
+  and loop volume (only in Settings today) as live controls on the
+  looper screen, published through `SharedControl` like the tempo.
+- **8c. Time signature.** 4/4, 3/4 or 6/8 for the metronome - the
+  scheduler's `Pattern` already has a bar length; the bar rounding,
+  the count-in and tempo-from-the-loop all have to follow it.
+
+### 9. Drum machine - extended
+
+Preset grooves, not a step editor: each drum style is a 4x4 grid of
+ready-made grooves, **variation** across and **strength** up, and you
+pick a cell - as on the NUX. Far more "run and play" than editing steps,
+and far less to build. Grooves are step patterns underneath, so the
+scheduler plays them as it plays the metronome.
+
+One-shot samples, not pre-recorded loops (whose tempo is baked in, so
+changing BPM would mean resampling). A small fixed-size polyphonic voice
+pool, pre-allocated to stay RT-safe. Kits load on the UI thread and are
+handed to the audio thread the way v1 step 5 hands over a restored loop,
+never loaded in the callback; embed one small CC0 kit via
+`include_bytes!` to keep the single-exe property, with an optional
+folder next to the config for more. The drums follow the loop's tempo,
+which is what step 6 was for. A drum level control beside 8b's.
+
+### 10. Mic channel - extended
 
 The second input as a track of its own, with independent record-enable,
 mute and level, once the track abstraction (v1 step 2) is in place. Nothing
