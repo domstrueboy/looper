@@ -218,7 +218,7 @@ recorded or the loop is cleared, then gone - which needs the mirror to
 keep the removed layer's copy for the same window, so a redone layer is
 saved again. Not across restarts.
 
-### 3. Metronome click synthesis
+### 3. Metronome click synthesis - done
 
 A short sine/triangle burst, generated once when the stream opens, at
 the granted sample rate. No synthesis in the callback, no allocation,

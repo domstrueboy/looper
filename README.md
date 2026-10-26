@@ -258,6 +258,7 @@ crates/
     src/audio/loop_stack.rs   pre-allocated stack of aligned mono layers
     src/audio/shared_control.rs  lock-free UI <-> audio thread relay
     src/audio/fault.rs        where a failing stream leaves word
+    src/audio/click.rs        the metronome click, built per stream rate
   looper-ui-egui/            rendering only - `render(ui, model) -> Action?`
     src/looper.rs             the looper screen
     src/settings.rs           the settings screen
