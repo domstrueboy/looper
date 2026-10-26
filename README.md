@@ -248,6 +248,7 @@ crates/
                               config dir (config_tests.rs)
     src/input.rs              short-press vs long-press-clear detection
     src/state_machine.rs      the pedal logic - pure, no audio, no egui
+    src/tempo.rs              a loop's tempo from its length, and ½ / 2×
     src/preroll.rs            the countdown before the first recording
     src/loop_mirror.rs        the UI thread's own copy of the loop, and
                               saving it (loop_mirror_tests.rs)
@@ -422,6 +423,18 @@ keeps the input path gated on the published state exactly as before -
 nothing is ever recorded after the state says it has stopped. The mirror
 lays the first take out cut at the loop length rather than wrapped, so
 the saved loop is the one that plays.
+
+Once a loop exists it sets the tempo (`tempo.rs`): the click follows
+the loop rather than `metronome_bpm`, so it lands on the loop's top
+every time round. Played against the click, the loop is a known number
+of bars and the tempo is the click's, recomputed from the exact length.
+Played without it, the beat count is guessed - the power of two that
+puts the tempo in 70-140 BPM, one doubling wide so exactly one fits -
+and ½ / 2× correct a wrong guess. Those are the only changes offered:
+halving needs an even beat count, so the click still meets the top. The
+tempo is an `f64` all the way to the callback, since a loop's is rarely
+whole; the UI thread works out which tempo applies and publishes it
+every frame.
 
 ### Recording alignment
 

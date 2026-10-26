@@ -6,9 +6,12 @@ use looper_hal::Backends;
 
 /// Which screen is up, and that screen's state - plain data, no `egui::`
 /// types.
+/// Both boxed: an enum is as big as its biggest variant, the two states
+/// differ by hundreds of bytes, and a screen changes rarely enough that
+/// the allocation is nothing.
 pub enum Screen {
-    Settings(SettingsState),
-    Looper(LooperState),
+    Settings(Box<SettingsState>),
+    Looper(Box<LooperState>),
 }
 
 pub struct App {
@@ -23,7 +26,7 @@ impl App {
     /// Settings, carrying the failure so it can say why.
     pub fn new(backends: Backends) -> Self {
         let mut app = Self {
-            screen: Screen::Settings(SettingsState::new(None)),
+            screen: Screen::Settings(Box::new(SettingsState::new(None))),
             backends,
         };
         match AppConfig::load() {
@@ -46,7 +49,7 @@ impl App {
         match LooperState::start(&self.backends, &config) {
             Ok(looper) => {
                 let _ = config.save();
-                self.screen = Screen::Looper(looper);
+                self.screen = Screen::Looper(Box::new(looper));
             }
             Err(err) => match &mut self.screen {
                 Screen::Settings(settings) => settings.error = Some(err),
@@ -64,7 +67,7 @@ impl App {
     /// first driver it can't claim. Installing the screen first drops
     /// the looper, and the streams with it.
     fn open_settings(&mut self, error: Option<String>) {
-        self.screen = Screen::Settings(SettingsState::new(error));
+        self.screen = Screen::Settings(Box::new(SettingsState::new(error)));
         if let Screen::Settings(settings) = &mut self.screen {
             settings.refresh(&self.backends);
         }

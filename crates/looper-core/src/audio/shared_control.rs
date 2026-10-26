@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use crate::state_machine::LoopState;
 
@@ -37,8 +37,10 @@ pub struct SharedControl {
     muted_layers: AtomicU32,
     /// The metronome toggle, UI -> audio.
     metronome_on: AtomicBool,
-    /// Its tempo, UI -> audio, live: nudged from the looper screen.
-    metronome_bpm: AtomicU32,
+    /// Its tempo, UI -> audio, live: nudged from the looper screen, or
+    /// taken from a loop's length. An `f64`'s bits, since a loop's tempo
+    /// is rarely a whole number.
+    metronome_bpm: AtomicU64,
 }
 
 impl SharedControl {
@@ -58,7 +60,7 @@ impl SharedControl {
             volume_pct: AtomicU32::new(volume_pct),
             muted_layers: AtomicU32::new(0),
             metronome_on: AtomicBool::new(false),
-            metronome_bpm: AtomicU32::new(metronome_bpm),
+            metronome_bpm: AtomicU64::new(f64::from(metronome_bpm).to_bits()),
         }
     }
 
@@ -66,8 +68,8 @@ impl SharedControl {
         self.metronome_on.store(on, Ordering::Release);
     }
 
-    pub fn publish_metronome_bpm(&self, bpm: u32) {
-        self.metronome_bpm.store(bpm, Ordering::Release);
+    pub fn publish_metronome_bpm(&self, bpm: f64) {
+        self.metronome_bpm.store(bpm.to_bits(), Ordering::Release);
     }
 
     pub fn publish_muted_layers(&self, muted: u32) {
@@ -167,8 +169,8 @@ impl SharedControl {
         self.metronome_on.load(Ordering::Acquire)
     }
 
-    pub(super) fn metronome_bpm(&self) -> u32 {
-        self.metronome_bpm.load(Ordering::Acquire)
+    pub(super) fn metronome_bpm(&self) -> f64 {
+        f64::from_bits(self.metronome_bpm.load(Ordering::Acquire))
     }
 
     pub(super) fn muted_layers(&self) -> u32 {

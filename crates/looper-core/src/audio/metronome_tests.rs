@@ -82,7 +82,7 @@ fn a_tempo_change_keeps_the_place_in_the_bar() {
     let mut metronome = Metronome::new(RATE, 120);
     free_run(&mut metronome, BEAT + BEAT / 2);
 
-    metronome.set_bpm(60);
+    metronome.set_bpm(60.0);
     let out = free_run(&mut metronome, 2 * BEAT + 2_000);
 
     assert_eq!(onsets(&out), vec![BEAT]);

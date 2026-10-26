@@ -1,3 +1,4 @@
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,6 +14,15 @@ use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
+use crate::tempo::LoopTempo;
+
+/// 4/4, as the metronome counts it.
+const BEATS_PER_BAR: u32 = 4;
+
+/// The metronome's range, for a tempo that isn't a whole number.
+fn bpm_range() -> RangeInclusive<f64> {
+    f64::from(*METRONOME_BPM_RANGE.start())..=f64::from(*METRONOME_BPM_RANGE.end())
+}
 
 /// State behind the looper screen: the state machine (owned here, on the
 /// UI thread), the relay into the audio thread, and the live streams.
@@ -36,6 +46,14 @@ pub struct LooperState {
     /// metronome is on. Only for showing it: the take opens on the audio
     /// thread at the bar line, and this side follows.
     count_in: Option<Instant>,
+    /// The loop's tempo, worked out from its length once it has one.
+    /// While a loop is there, the click follows this rather than the
+    /// configured tempo - anything else would drift off the loop.
+    loop_tempo: Option<LoopTempo>,
+    /// Set as a first take stops, until its length is known: the bar it
+    /// was played against, if the click was on - then the tempo is the
+    /// click's, not a guess.
+    tempo_pending: Option<Option<f64>>,
     /// Kept here as well as in the layer stack, which lives on the audio
     /// thread out of reach - the UI needs it to show "n/max" and to know
     /// when overdubbing is still possible.
@@ -100,7 +118,8 @@ impl LooperState {
         )?;
 
         // A restored loop is there, but silent until it's asked for.
-        let state_machine = if restored.is_empty() {
+        let restored_empty = restored.is_empty();
+        let state_machine = if restored_empty {
             LoopStateMachine::new()
         } else {
             LoopStateMachine::stopped()
@@ -117,6 +136,10 @@ impl LooperState {
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             stop_at: None,
             count_in: None,
+            loop_tempo: None,
+            // A saved loop has a length but no tempo yet; guessed once
+            // the audio thread reports the length.
+            tempo_pending: (!restored_empty).then_some(None),
             max_layers: settings.max_layers as usize,
             muted_layers: 0,
             metronome_on: false,
@@ -200,8 +223,53 @@ impl LooperState {
         self.metronome_on
     }
 
-    pub fn metronome_bpm(&self) -> u32 {
-        self.config.metronome_bpm
+    /// The tempo the click is playing at: the loop's while there is one,
+    /// otherwise the configured one.
+    pub fn tempo(&self) -> f64 {
+        match self.active_loop_tempo() {
+            Some(tempo) => tempo.bpm(),
+            None => f64::from(self.config.metronome_bpm),
+        }
+    }
+
+    /// Whether the tempo is the loop's - which is fixed by its length,
+    /// so it can only be halved or doubled, not nudged.
+    pub fn tempo_is_the_loops(&self) -> bool {
+        self.active_loop_tempo().is_some()
+    }
+
+    /// A removed loop that redo could bring back keeps its tempo, but
+    /// with nothing playing the click is the configured one again.
+    fn active_loop_tempo(&self) -> Option<LoopTempo> {
+        self.loop_tempo.filter(|_| self.layer_count() > 0)
+    }
+
+    pub fn can_halve_tempo(&self) -> bool {
+        self.active_loop_tempo()
+            .and_then(|tempo| tempo.halved(bpm_range()))
+            .is_some()
+    }
+
+    pub fn can_double_tempo(&self) -> bool {
+        self.active_loop_tempo()
+            .and_then(|tempo| tempo.doubled(bpm_range()))
+            .is_some()
+    }
+
+    /// For a guess that came out twice too fast: same loop, half the
+    /// beats.
+    pub fn halve_tempo(&mut self) {
+        if let Some(halved) = self.active_loop_tempo().and_then(|t| t.halved(bpm_range())) {
+            self.loop_tempo = Some(halved);
+            self.control.publish_metronome_bpm(self.tempo());
+        }
+    }
+
+    pub fn double_tempo(&mut self) {
+        if let Some(doubled) = self.active_loop_tempo().and_then(|t| t.doubled(bpm_range())) {
+            self.loop_tempo = Some(doubled);
+            self.control.publish_metronome_bpm(self.tempo());
+        }
     }
 
     /// Off at every start: a click nobody asked for, the moment the app
@@ -290,10 +358,13 @@ impl LooperState {
         self.save_config();
     }
 
-    /// Nudges the tempo by `delta` BPM, within its range, while it
-    /// plays. Saved, so Settings and the next start agree with what was
-    /// last heard.
+    /// Nudges the configured tempo by `delta` BPM, within its range,
+    /// while it plays. Saved, so Settings and the next start agree with
+    /// what was last heard. Not while a loop sets the tempo.
     pub fn change_metronome_bpm(&mut self, delta: i32) {
+        if self.tempo_is_the_loops() {
+            return;
+        }
         let bpm = self
             .config
             .metronome_bpm
@@ -303,7 +374,7 @@ impl LooperState {
             return;
         }
         self.config.metronome_bpm = bpm;
-        self.control.publish_metronome_bpm(bpm);
+        self.control.publish_metronome_bpm(self.tempo());
         self.save_config();
     }
 
@@ -414,9 +485,23 @@ impl LooperState {
             && self.control.loop_len() >= target
         {
             self.stop_at = None;
-            self.state_machine.press();
-            self.control.publish_state(self.state_machine.state());
+            self.stop_recording();
         }
+
+        if let Some(bar) = self.tempo_pending
+            && self.state() != LoopState::Recording
+            && self.layer_count() > 0
+        {
+            let len = self.control.loop_len();
+            self.loop_tempo = Some(match bar {
+                Some(bar) => LoopTempo::from_bars(len, self.sample_rate, bar, BEATS_PER_BAR),
+                None => LoopTempo::guess(len, self.sample_rate),
+            });
+            self.tempo_pending = None;
+        }
+        // Every frame rather than at each change: which tempo applies
+        // turns on the layer count, which the audio thread moves.
+        self.control.publish_metronome_bpm(self.tempo());
 
         if self.control.take_capture_lost() > 0 {
             self.mirror.note_lost_samples();
@@ -463,6 +548,8 @@ impl LooperState {
                 } else if self.state() == LoopState::Idle && self.preroll.is_enabled() {
                     self.state_machine.arm();
                     self.preroll.start(now);
+                } else if self.state() == LoopState::Recording {
+                    self.stop_recording();
                 } else {
                     self.state_machine.press();
                     self.preroll.cancel();
@@ -490,9 +577,20 @@ impl LooperState {
         (target > played && target <= capacity).then_some(target as usize)
     }
 
+    /// Ends a first take, noting what its tempo will come from: the
+    /// length isn't fixed until the audio thread has handled the stop.
+    fn stop_recording(&mut self) {
+        self.tempo_pending = Some(self.metronome_on.then(|| self.bar_frames()));
+        self.loop_tempo = None;
+        self.state_machine.press();
+        self.control.publish_state(self.state_machine.state());
+    }
+
     fn clear(&mut self) {
         self.stop_at = None;
         self.count_in = None;
+        self.loop_tempo = None;
+        self.tempo_pending = None;
         self.state_machine.clear();
         self.preroll.cancel();
         self.control.publish_state(self.state_machine.state());

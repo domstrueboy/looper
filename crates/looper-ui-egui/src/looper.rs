@@ -205,6 +205,10 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
 
 /// The metronome toggle, lit while on and naming its tempo, with a step
 /// slower and a step faster either side. Live - no trip to Settings.
+///
+/// While a loop sets the tempo, the steps become halve and double: the
+/// tempo is fixed by the loop's length, and those are the only changes
+/// that keep the click on the loop's top.
 fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bool) {
     // `,` and `.` sit under `<` and `>` on most layouts. Read as
     // presses, so holding one repeats.
@@ -218,27 +222,59 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
         METRONOME_BUTTON_SIZE[0] + TEMPO_BUTTON_SIZE[0] * 2.0 + spacing * 2.0,
         METRONOME_BUTTON_SIZE[1],
     );
+    let from_loop = looper.tempo_is_the_loops();
     ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        let (label, hint, enabled) = if from_loop {
+            ("½", "Half the tempo (,)", looper.can_halve_tempo())
+        } else {
+            ("−", "Slower (,)", true)
+        };
         let slower = ui
-            .add_sized(TEMPO_BUTTON_SIZE, egui::Button::new("−"))
-            .on_hover_text("Slower (,)");
-        if slower.clicked() || slower_pressed {
-            looper.change_metronome_bpm(-1);
+            .add_enabled(enabled, egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()))
+            .on_hover_text(hint);
+        if slower.clicked() || (slower_pressed && enabled) {
+            if from_loop {
+                looper.halve_tempo();
+            } else {
+                looper.change_metronome_bpm(-1);
+            }
         }
 
+        // A loop's tempo is rarely whole, and shown to a tenth so it
+        // reads as measured rather than chosen.
+        let tempo = if from_loop {
+            format!("{:.1}", looper.tempo())
+        } else {
+            format!("{}", looper.tempo())
+        };
         let toggle = egui::Button::selectable(
             looper.is_metronome_on(),
-            format!("Metronome {} BPM (M)", looper.metronome_bpm()),
+            format!("Metronome {tempo} BPM (M)"),
         );
-        if ui.add_sized(METRONOME_BUTTON_SIZE, toggle).clicked() || toggle_pressed {
+        let toggle = ui.add_sized(METRONOME_BUTTON_SIZE, toggle);
+        let toggle = if from_loop {
+            toggle.on_hover_text("Tempo taken from the loop")
+        } else {
+            toggle
+        };
+        if toggle.clicked() || toggle_pressed {
             looper.toggle_metronome();
         }
 
+        let (label, hint, enabled) = if from_loop {
+            ("2×", "Double the tempo (.)", looper.can_double_tempo())
+        } else {
+            ("+", "Faster (.)", true)
+        };
         let faster = ui
-            .add_sized(TEMPO_BUTTON_SIZE, egui::Button::new("+"))
-            .on_hover_text("Faster (.)");
-        if faster.clicked() || faster_pressed {
-            looper.change_metronome_bpm(1);
+            .add_enabled(enabled, egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()))
+            .on_hover_text(hint);
+        if faster.clicked() || (faster_pressed && enabled) {
+            if from_loop {
+                looper.double_tempo();
+            } else {
+                looper.change_metronome_bpm(1);
+            }
         }
     });
 }

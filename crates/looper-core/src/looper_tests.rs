@@ -588,7 +588,7 @@ fn the_tempo_changes_live_and_is_saved() {
 
     looper.change_metronome_bpm(180);
 
-    assert_eq!(looper.metronome_bpm(), 300);
+    assert_eq!(looper.tempo(), 300.0);
     let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
     assert_eq!(saved.metronome_bpm, 300, "Settings and the next start agree");
 
@@ -609,7 +609,7 @@ fn the_tempo_changes_live_and_is_saved() {
 fn the_tempo_stays_inside_its_range() {
     let (mut looper, _driver, dir) = start("looper-tempo-range", &settings());
     looper.change_metronome_bpm(-1_000);
-    assert_eq!(looper.metronome_bpm(), *METRONOME_BPM_RANGE.start());
+    assert_eq!(looper.tempo(), f64::from(*METRONOME_BPM_RANGE.start()));
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -739,5 +739,108 @@ fn turning_the_metronome_off_calls_a_count_in_off() {
     assert_eq!(looper.state(), LoopState::Idle);
     feed(&mut looper, &driver, 2 * BAR, at);
     assert_eq!(looper.state(), LoopState::Idle, "and nothing starts later");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- Tempo from the loop ----------------------------------------------------
+
+/// A first take of `frames` with the metronome off, stopped and settled.
+/// The loop plays silent, so a click is all the output carries.
+fn free_take(name: &str, frames: usize) -> (LooperState, MockDriver, PathBuf, Instant) {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        volume_pct: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start(name, &no_preroll);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, frames, at);
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    (looper, driver, dir, at)
+}
+
+#[test]
+fn a_loop_played_without_the_click_gets_a_tempo_from_its_length() {
+    // 2.6 s is four beats at 92.3.
+    let (looper, _driver, dir, _) = free_take("looper-tempo-guess", 114_660);
+    assert!(looper.tempo_is_the_loops());
+    assert!((looper.tempo() - 92.3).abs() < 0.1, "got {}", looper.tempo());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_loop_played_to_the_click_keeps_the_clicks_tempo() {
+    // Three bars at 120: the guess would have made it 160 or 80.
+    let (mut looper, driver, dir, at) = record_against_the_click("looper-tempo-click", 3 * BAR);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert!(looper.tempo_is_the_loops());
+    assert!((looper.tempo() - 120.0).abs() < 0.01, "got {}", looper.tempo());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_wrong_guess_is_halved_or_doubled_but_not_nudged() {
+    let (mut looper, _driver, dir, _) = free_take("looper-tempo-fix", 88_200);
+    assert!((looper.tempo() - 120.0).abs() < 0.01, "two seconds, four beats");
+
+    looper.change_metronome_bpm(5);
+    assert!((looper.tempo() - 120.0).abs() < 0.01, "the loop fixes it");
+
+    looper.halve_tempo();
+    assert!((looper.tempo() - 60.0).abs() < 0.01);
+    looper.double_tempo();
+    looper.double_tempo();
+    assert!((looper.tempo() - 240.0).abs() < 0.01);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_loops_tempo_reaches_the_click() {
+    // Halved to 60 at 44.1 kHz, a beat is 44,100 frames: two or three
+    // clicks start in 90,000 frames, where 120 would start four or five.
+    let (mut looper, driver, dir, at) = free_take("looper-tempo-click-rate", 88_200);
+    looper.halve_tempo();
+    looper.toggle_metronome();
+    looper.tick(false, at);
+
+    let out = driver.cycle(&vec![0.0; 90_000]);
+    let left: Vec<f32> = out.iter().step_by(2).copied().collect();
+    let clicks = left
+        .windows(2)
+        .filter(|pair| pair[0] == 0.0 && pair[1] != 0.0)
+        .count();
+    assert!((2..=3).contains(&clicks), "got {clicks}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clearing_the_loop_hands_the_tempo_back() {
+    let (mut looper, _driver, dir, at) = free_take("looper-tempo-clear", 114_660);
+    looper.tick(true, at);
+    looper.tick(true, at + Duration::from_millis(600));
+    assert_eq!(looper.state(), LoopState::Idle);
+
+    assert!(!looper.tempo_is_the_loops());
+    assert_eq!(looper.tempo(), f64::from(config::DEFAULT_METRONOME_BPM));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_saved_loop_comes_back_with_a_tempo() {
+    let (looper, _driver, dir, _) = free_take("looper-tempo-restore", 88_200);
+    drop(looper);
+
+    let (backend, driver) = mock();
+    let backends = Backends::new(vec![Box::new(backend)]);
+    let mut restored = LooperState::start_in(&backends, &settings(), dir.clone()).expect("opens");
+    driver.cycle(&vec![0.0; 512]);
+    restored.tick(false, Instant::now());
+
+    assert!(restored.tempo_is_the_loops());
+    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
     let _ = std::fs::remove_dir_all(&dir);
 }

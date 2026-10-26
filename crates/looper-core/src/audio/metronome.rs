@@ -12,7 +12,7 @@ pub struct Metronome {
     /// time with.
     free_pos: u64,
     sample_rate: u32,
-    bpm: u32,
+    bpm: f64,
 }
 
 impl Metronome {
@@ -23,7 +23,7 @@ impl Metronome {
             voice: Voice::default(),
             free_pos: 0,
             sample_rate,
-            bpm,
+            bpm: f64::from(bpm),
         }
     }
 
@@ -31,12 +31,12 @@ impl Metronome {
     /// next beat stays half way. Left as a frame count, the old position
     /// would land anywhere on the new grid - two clicks in a row, or a
     /// long gap. Cheap enough to call every callback.
-    pub fn set_bpm(&mut self, bpm: u32) {
+    pub fn set_bpm(&mut self, bpm: f64) {
         if bpm == self.bpm {
             return;
         }
         let old_step = self.scheduler.frames_per_step();
-        self.scheduler = Scheduler::new(self.sample_rate, f64::from(bpm), Pattern::METRONOME);
+        self.scheduler = Scheduler::new(self.sample_rate, bpm, Pattern::METRONOME);
         self.free_pos = (self.free_pos as f64 * self.scheduler.frames_per_step() / old_step) as u64;
         self.bpm = bpm;
     }

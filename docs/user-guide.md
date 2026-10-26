@@ -158,7 +158,17 @@ snaps to the nearest bar line:
   screen says **Recording to the bar line** while it does. Press again
   to stop right away; the rest of the bar stays silent.
 
-With the metronome off, a loop is exactly as long as you played it.
+With the metronome off, a loop is exactly as long as you played it -
+and the app works out its tempo from that length. It assumes the loop
+is 1, 2, 4 or 8 bars, whichever gives a tempo between 70 and 140 BPM,
+and the metronome button shows the result, e.g. **92.3 BPM**. Turn the
+click on and it fits the loop exactly.
+
+While there's a loop, the loop sets the tempo, so **−** and **+** become
+**½** and **2×**: if the guess is twice too fast or too slow, halve or
+double it (the **,** and **.** keys do the same). A loop recorded with
+the metronome on keeps the tempo it was played to - nothing is guessed.
+Clear the loop and the tempo goes back to the one you set.
 
 ## Your loop is kept
 
