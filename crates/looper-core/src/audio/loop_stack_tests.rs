@@ -293,3 +293,34 @@ fn an_overdub_does_not_change_the_recorded_length() {
     stack.read_mixed_with_overdub(&mut out, &[3.0, 4.0], 100);
     assert_eq!(stack.recorded_len(), 2, "the loop length is already fixed");
 }
+
+#[test]
+fn a_muted_layer_is_left_out_of_the_mix_until_unmuted() {
+    let mut stack = with_first_layer(&[1.0, 2.0]);
+    stack.begin_overdub();
+    let mut out = [0.0; 2];
+    stack.read_mixed_with_overdub(&mut out, &[10.0, 20.0], 100);
+    stack.finish_overdub();
+
+    stack.set_muted(0b01);
+    let mut muted = [0.0; 2];
+    stack.read_mixed(&mut muted, 100);
+    assert_eq!(muted, [10.0, 20.0], "only the overdub");
+
+    stack.set_muted(0);
+    let mut both = [0.0; 2];
+    stack.read_mixed(&mut both, 100);
+    assert_eq!(both, [11.0, 22.0], "and back, nothing lost");
+}
+
+#[test]
+fn muting_every_layer_keeps_the_loop_running() {
+    // Silent, but still in time: unmuting picks up where playback is,
+    // not from the top.
+    let mut stack = with_first_layer(&[1.0, 2.0, 3.0]);
+    stack.set_muted(0b1);
+    let mut out = [7.0; 2];
+    stack.read_mixed(&mut out, 100);
+    assert_eq!(out, [0.0; 2]);
+    assert_eq!(stack.play_pos(), 2);
+}

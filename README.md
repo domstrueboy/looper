@@ -337,6 +337,15 @@ callback. Two consequences worth knowing:
 - Overdubbing past the end of the loop sums into the same layer rather
   than replacing it, so a second pass doesn't erase the first.
 
+In extended mode each finished layer can be muted. The UI thread owns a
+bitmask, one bit per layer, and publishes it whole through
+`SharedControl`; the output callback hands it to the stack each pass,
+and `mix_at` skips the set bits. A muted layer is still recorded,
+counted and saved - only playback leaves it out. Removing a layer or
+clearing drops its bit, so an overdub recorded into the freed slot
+doesn't come out muted. Mutes aren't saved: a loop reopens with every
+layer playing.
+
 ### Layer volume
 
 There is no per-layer gain: every layer plays back at the level it was
@@ -448,9 +457,11 @@ bytes, and the settings screen shows the figure next to the sliders.
 
 `mode` (`"mini"` or `"extended"`, default mini) is the one setting not
 on the Settings screen: it's the Mini / Extended switch in the looper
-screen's top row, saved the moment it's flipped. The switch only works
-in `Idle` - with a loop recorded, flipping it could hide a control whose
-effect is still audible.
+screen's top row, saved the moment it's flipped. The switch works in
+`Idle` and `Stopped`, never while anything plays or records - and
+`Stopped` has to count, since a saved loop always comes back stopped.
+Going to mini unmutes every layer: mini has no layer row, so a mute
+kept there would be silence with no visible cause.
 
 Deliberately *not* settings, and living in `looper-hal` because they are
 statements about devices rather than about the app: `MAX_BLOCK_FRAMES`

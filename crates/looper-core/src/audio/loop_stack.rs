@@ -59,6 +59,9 @@ pub struct LoopStack {
     /// The layer being written to right now, if any. It sits just above
     /// `count` and is only counted once the take is finished.
     recording: Option<usize>,
+    /// One bit per layer, set = left out of the mix. Only playback reads
+    /// it: a muted layer is still there, recorded and saved, just silent.
+    muted: u32,
 }
 
 impl LoopStack {
@@ -73,7 +76,14 @@ impl LoopStack {
             loop_len: 0,
             play_pos: 0,
             recording: None,
+            muted: 0,
         }
+    }
+
+    /// Which layers to leave out, as a bitmask - bit `n` is layer `n`.
+    /// Set by the callback each pass from what the UI thread published.
+    pub fn set_muted(&mut self, muted: u32) {
+        self.muted = muted;
     }
 
     fn capacity(&self) -> usize {
@@ -279,7 +289,9 @@ impl LoopStack {
         };
         self.layers[..active]
             .iter()
-            .map(|layer| layer.sample_at(pos, self.loop_len))
+            .enumerate()
+            .filter(|(index, _)| self.muted & (1 << index) == 0)
+            .map(|(_, layer)| layer.sample_at(pos, self.loop_len))
             .sum()
     }
 }

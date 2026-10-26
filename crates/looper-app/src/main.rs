@@ -29,7 +29,9 @@ impl eframe::App for App {
                 // past, for one frame, whenever a pre-roll ran out.
                 let space_down = ui.ctx().input(|i| i.key_down(egui::Key::Space));
                 looper.tick(space_down, Instant::now());
-                looper_ui_egui::looper::render(ui, looper)
+                let action = looper_ui_egui::looper::render(ui, looper);
+                fit_height_to_content(ui);
+                action
             }
         };
 
@@ -42,6 +44,24 @@ impl eframe::App for App {
 /// Big enough for the taskbar to downscale cleanly; the executable's own
 /// icon resource carries the other sizes (see `build.rs`).
 const WINDOW_ICON_SIZE: u32 = 64;
+
+/// Resizes the window to the height the looper screen just drew, so
+/// extended's extra rows don't fall off the bottom and mini doesn't
+/// leave a gap. Looper screen only: Settings scrolls, so it would take
+/// whatever height it was given rather than say what it needs.
+fn fit_height_to_content(ui: &egui::Ui) {
+    let wanted = ui.min_rect().height().ceil();
+    let Some(current) = ui.ctx().input(|i| i.viewport().inner_rect) else {
+        return;
+    };
+    // A pixel of slack, or rounding would resize it every frame.
+    if (current.height() - wanted).abs() > 1.0 {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+            current.width(),
+            wanted,
+        )));
+    }
+}
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {

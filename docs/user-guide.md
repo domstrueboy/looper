@@ -142,12 +142,19 @@ a take in its own right.
 ## Mini and extended
 
 The **Mini / Extended** switch at the top of the looper screen picks how
-much the screen shows. **Mini** is the plain pedal. **Extended** will add
-a layer list, a drum machine and a mic channel as they're built - for
-now it only marks where they'll go. The app remembers your choice.
+much the screen shows. **Mini** is the plain pedal. **Extended** adds a
+row of numbered layer buttons under it - a drum machine and a mic
+channel will join them as they're built. The app remembers your choice.
 
-You can only switch with no loop recorded. Clear the loop first
-(hold the button) if the switch is greyed out.
+Each layer button is lit while that layer plays. Click it, or press its
+number key (**1**, **2**, ...), to mute the layer; again to bring it
+back. The layer isn't lost while muted - it's still saved, and still
+counts towards **Max layers**. Mutes are forgotten when the app closes.
+
+You can switch while the loop is stopped, but not while it plays or
+records - stop it first if the switch is greyed out. Going back to
+**Mini** unmutes every layer, since Mini has no layer buttons to show
+a mute.
 
 ## Changing settings later
 
@@ -195,5 +202,5 @@ Two messages can appear at the top of the looper screen:
 ## Not yet supported
 
 This is an early, minimal version. Not (yet) included: trimming the
-start/end of a loop, muting individual layers, amp modeling (NAM),
+start/end of a loop, amp modeling (NAM),
 saving loops to a file, or a metronome/tempo sync.

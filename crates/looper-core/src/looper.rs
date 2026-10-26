@@ -30,6 +30,10 @@ pub struct LooperState {
     /// thread out of reach - the UI needs it to show "n/max" and to know
     /// when overdubbing is still possible.
     max_layers: usize,
+    /// Which layers are muted, one bit each - owned here and published
+    /// to the audio thread whole. Not saved: a loop reopens with every
+    /// layer playing.
+    muted_layers: u32,
     /// The loop as the UI thread sees it, which is the only copy that can
     /// be written to disk - see `LoopMirror`.
     mirror: LoopMirror,
@@ -101,6 +105,7 @@ impl LooperState {
             button_held: false,
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             max_layers: settings.max_layers as usize,
+            muted_layers: 0,
             mirror: LoopMirror::new(streams.captured, streams.sample_rate, restored),
             sample_rate: streams.sample_rate,
             config: settings.clone(),
@@ -177,6 +182,27 @@ impl LooperState {
         self.control.publish_state(self.state_machine.state());
     }
 
+    pub fn is_layer_muted(&self, index: usize) -> bool {
+        self.muted_layers & (1 << index) != 0
+    }
+
+    /// Mutes a finished layer, or unmutes it. The take still being
+    /// recorded can't be muted - it isn't a layer yet.
+    pub fn toggle_layer_mute(&mut self, index: usize) {
+        if index >= self.layer_count() {
+            return;
+        }
+        self.muted_layers ^= 1 << index;
+        self.control.publish_muted_layers(self.muted_layers);
+    }
+
+    /// Clears the mute bits from `count` up, so a layer recorded into a
+    /// freed slot doesn't start out muted.
+    fn forget_mutes_from(&mut self, count: usize) {
+        self.muted_layers &= (1 << count) - 1;
+        self.control.publish_muted_layers(self.muted_layers);
+    }
+
     /// Only while nothing is being recorded - dropping a finished layer
     /// mid-take would be ambiguous about which one is meant.
     pub fn can_remove_layer(&self) -> bool {
@@ -194,6 +220,7 @@ impl LooperState {
             self.clear();
         } else {
             self.control.request_remove_layer();
+            self.forget_mutes_from(self.layer_count() - 1);
             self.mirror.remove_last_layer();
             self.save_loop();
         }
@@ -203,14 +230,17 @@ impl LooperState {
         self.config.mode
     }
 
-    /// Only with nothing recorded: a switch mid-loop would hide controls
-    /// whose effect is still audible, like a layer muted in extended.
+    /// Only while nothing plays or records. A stopped loop counts as
+    /// still: a saved loop always comes back stopped, so requiring no
+    /// loop at all would mean clearing it just to switch.
     pub fn can_switch_mode(&self) -> bool {
-        self.state() == LoopState::Idle
+        matches!(self.state(), LoopState::Idle | LoopState::Stopped)
     }
 
     /// Flips between mini and extended, and saves it so the app reopens
-    /// the way it was left.
+    /// the way it was left. Going to mini unmutes every layer: mini has
+    /// no layer row, so a mute there would be silence with no visible
+    /// cause.
     pub fn toggle_mode(&mut self) {
         if !self.can_switch_mode() {
             return;
@@ -219,6 +249,9 @@ impl LooperState {
             Mode::Mini => Mode::Extended,
             Mode::Extended => Mode::Mini,
         };
+        if self.config.mode == Mode::Mini {
+            self.forget_mutes_from(0);
+        }
         if let Err(err) = self.config.save_to(&config::config_path_in(&self.dir)) {
             eprintln!("could not save the mode: {err}");
         }
@@ -303,6 +336,7 @@ impl LooperState {
         self.preroll.cancel();
         self.control.publish_state(self.state_machine.state());
         self.control.request_clear();
+        self.forget_mutes_from(0);
         self.mirror.clear();
         loop_mirror::delete(&config::loop_dir_in(&self.dir));
     }

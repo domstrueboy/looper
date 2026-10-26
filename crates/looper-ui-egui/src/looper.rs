@@ -8,6 +8,22 @@ use crate::indicator;
 /// centered without laying it out twice.
 const CONTROL_BUTTON_SIZE: [f32; 2] = [118.0, 24.0];
 
+/// Square, so up to eight fit across the window in one row.
+const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
+
+/// Layer `n`'s mute key is `LAYER_KEYS[n]`, matching the number on its
+/// button. As many as `MAX_LAYERS_RANGE` allows.
+const LAYER_KEYS: [egui::Key; 8] = [
+    egui::Key::Num1,
+    egui::Key::Num2,
+    egui::Key::Num3,
+    egui::Key::Num4,
+    egui::Key::Num5,
+    egui::Key::Num6,
+    egui::Key::Num7,
+    egui::Key::Num8,
+];
+
 /// Everything the screen says about the current state, gathered once per
 /// frame so that no two widgets can disagree about it.
 fn readout(looper: &LooperState) -> indicator::Readout {
@@ -160,7 +176,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 ui.label("O: overdub   |   R: remove last");
 
                 if looper.mode() == Mode::Extended {
-                    extended_area(ui);
+                    extended_area(ui, looper);
                 }
             });
         });
@@ -176,7 +192,7 @@ fn mode_switch(ui: &mut egui::Ui, looper: &mut LooperState) {
         .add_enabled_ui(looper.can_switch_mode(), |ui| {
             let option = |ui: &mut egui::Ui, this: Mode, label: &str| {
                 ui.selectable_label(mode == this, label)
-                    .on_disabled_hover_text("Clear the loop to switch")
+                    .on_disabled_hover_text("Stop the loop to switch")
                     .clicked()
                     && mode != this
             };
@@ -191,9 +207,44 @@ fn mode_switch(ui: &mut egui::Ui, looper: &mut LooperState) {
     }
 }
 
-/// Where the extended-only controls go as they land: the layer list
-/// first, then drums and the mic.
-fn extended_area(ui: &mut egui::Ui) {
+/// What extended adds below the pedal. Drums and the mic will join the
+/// layer row here.
+fn extended_area(ui: &mut egui::Ui, looper: &mut LooperState) {
     ui.separator();
-    ui.weak("Extended controls will appear here");
+    layer_row(ui, looper);
+}
+
+/// One button per layer, numbered in recording order and lit while it
+/// plays. A row rather than a list: eight layers fit across the window,
+/// and wouldn't fit down it.
+fn layer_row(ui: &mut egui::Ui, looper: &mut LooperState) {
+    let count = looper.layer_count();
+    if count == 0 {
+        ui.weak("Layers appear here once there's a loop");
+        return;
+    }
+    let key_pressed = ui
+        .ctx()
+        .input(|i| LAYER_KEYS.iter().position(|key| i.key_pressed(*key)));
+
+    // Measured and allocated like the control row, to center it.
+    let spacing = ui.spacing().item_spacing.x;
+    let row = egui::vec2(
+        count as f32 * (LAYER_BUTTON_SIZE[0] + spacing) - spacing,
+        LAYER_BUTTON_SIZE[1],
+    );
+    ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        for index in 0..count {
+            let playing = !looper.is_layer_muted(index);
+            let button = egui::Button::selectable(playing, (index + 1).to_string());
+            let clicked = ui
+                .add_sized(LAYER_BUTTON_SIZE, button)
+                .on_hover_text(if playing { "Mute" } else { "Unmute" })
+                .clicked();
+            if clicked || key_pressed == Some(index) {
+                looper.toggle_layer_mute(index);
+            }
+        }
+    });
+    ui.label(format!("1-{count}: mute / unmute a layer"));
 }

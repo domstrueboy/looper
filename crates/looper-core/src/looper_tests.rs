@@ -327,3 +327,123 @@ fn the_mode_is_locked_once_anything_is_under_way() {
     assert_eq!(looper.mode(), Mode::Mini, "unchanged");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Layer mute -----------------------------------------------------------
+
+/// A looper playing two layers: a first take and one overdub.
+fn two_layers(name: &str) -> (LooperState, MockDriver, PathBuf, Instant) {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start(name, &no_preroll);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.5; 2_048]);
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.0; 512]);
+
+    looper.toggle_overdub();
+    driver.cycle(&vec![0.25; 512]);
+    looper.toggle_overdub();
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.layer_count(), 2, "set up");
+    (looper, driver, dir, at)
+}
+
+#[test]
+fn a_finished_layer_mutes_and_unmutes() {
+    let (mut looper, _driver, dir, _) = two_layers("looper-mute");
+
+    looper.toggle_layer_mute(1);
+    assert!(looper.is_layer_muted(1));
+    assert!(!looper.is_layer_muted(0), "only the one asked for");
+
+    looper.toggle_layer_mute(1);
+    assert!(!looper.is_layer_muted(1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_layer_that_does_not_exist_cannot_be_muted() {
+    let (mut looper, _driver, dir, _) = two_layers("looper-mute-missing");
+    looper.toggle_layer_mute(2);
+    assert!(!looper.is_layer_muted(2));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn removing_a_muted_layer_frees_its_slot_unmuted() {
+    // Otherwise the next overdub, recorded into the same slot, would be
+    // silent from the moment it was finished.
+    let (mut looper, _driver, dir, _) = two_layers("looper-mute-remove");
+    looper.toggle_layer_mute(0);
+    looper.toggle_layer_mute(1);
+
+    looper.remove_last_layer();
+
+    assert!(!looper.is_layer_muted(1), "the freed slot");
+    assert!(looper.is_layer_muted(0), "the layer still there keeps its mute");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn clearing_forgets_every_mute() {
+    let (mut looper, _driver, dir, at) = two_layers("looper-mute-clear");
+    looper.toggle_layer_mute(0);
+
+    looper.tick(true, at);
+    looper.tick(true, at + Duration::from_millis(600));
+    assert_eq!(looper.state(), LoopState::Idle, "cleared");
+
+    assert!(!looper.is_layer_muted(0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn muting_every_layer_silences_the_output() {
+    // The mask has to cross to the audio thread, not just flip here.
+    let (mut looper, driver, dir, _) = two_layers("looper-mute-output");
+    let silence = vec![0.0; 512];
+    assert!(driver.cycle(&silence).iter().any(|&s| s != 0.0), "playing");
+
+    looper.toggle_layer_mute(0);
+    looper.toggle_layer_mute(1);
+    assert!(driver.cycle(&silence).iter().all(|&s| s == 0.0), "silent");
+
+    looper.toggle_layer_mute(1);
+    assert!(driver.cycle(&silence).iter().any(|&s| s != 0.0), "one back");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_stopped_loop_still_lets_the_mode_switch() {
+    // A saved loop always comes back stopped; clearing it just to switch
+    // would cost the loop.
+    let (mut looper, _driver, dir, at) = two_layers("looper-mode-stopped");
+    assert!(!looper.can_switch_mode(), "locked while it plays");
+
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Stopped);
+    looper.toggle_mode();
+
+    assert_eq!(looper.mode(), Mode::Extended);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn going_back_to_mini_unmutes_every_layer() {
+    // Mini shows no layer row, so a mute kept there would be silence
+    // with nothing on screen to explain it.
+    let (mut looper, _driver, dir, at) = two_layers("looper-mode-unmute");
+    press(&mut looper, at, at);
+    looper.toggle_mode();
+    looper.toggle_layer_mute(0);
+
+    looper.toggle_mode();
+
+    assert_eq!(looper.mode(), Mode::Mini);
+    assert!(!looper.is_layer_muted(0));
+    let _ = std::fs::remove_dir_all(&dir);
+}

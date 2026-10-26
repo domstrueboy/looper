@@ -198,11 +198,10 @@ check.
 
 A `mode` field in `AppConfig` (default mini) and a button on the looper
 screen to flip it, with an empty extended area for later steps to fill.
-The button is enabled only in `Idle`: with no loop recorded there is
-nothing a switch could change mid-play - a layer muted in extended
-can't silently stay muted in mini, where the mute isn't visible.
+The button is enabled in `Idle` and `Stopped`, never mid-play. Going to
+mini unmutes every layer, since mini can't show a mute.
 
-### 1. Per-layer mute - extended
+### 1. Per-layer mute - extended - done
 
 A `mute: bool` on `Layer` and a per-layer UI list. The layer stack
 already supports independent layer management; mute is the one piece

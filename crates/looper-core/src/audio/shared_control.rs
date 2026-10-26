@@ -30,6 +30,10 @@ pub struct SharedControl {
     // than a plain value on the audio side so it can become adjustable
     // without a restart.
     volume_pct: AtomicU32,
+    /// Which layers are muted, one bit each, UI -> audio. A bitmask so
+    /// every layer's mute crosses in one atomic; `MAX_LAYERS_RANGE` tops
+    /// out well inside 32.
+    muted_layers: AtomicU32,
 }
 
 impl SharedControl {
@@ -46,7 +50,12 @@ impl SharedControl {
             input_underruns: AtomicUsize::new(0),
             output_underruns: AtomicUsize::new(0),
             volume_pct: AtomicU32::new(volume_pct),
+            muted_layers: AtomicU32::new(0),
         }
+    }
+
+    pub fn publish_muted_layers(&self, muted: u32) {
+        self.muted_layers.store(muted, Ordering::Release);
     }
 
     pub fn publish_state(&self, state: LoopState) {
@@ -126,6 +135,10 @@ impl SharedControl {
         self.loop_len.store(len, Ordering::Release);
         self.play_pos.store(pos, Ordering::Release);
         self.layer_count.store(layers, Ordering::Release);
+    }
+
+    pub(super) fn muted_layers(&self) -> u32 {
+        self.muted_layers.load(Ordering::Acquire)
     }
 
     pub(super) fn volume_pct(&self) -> u32 {

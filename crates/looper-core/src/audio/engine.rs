@@ -175,6 +175,7 @@ impl OutputPath {
             if self.control.take_remove_layer_request() {
                 self.stack.remove_last_layer();
             }
+            self.stack.set_muted(self.control.muted_layers());
 
             match state {
                 LoopState::Recording => {
