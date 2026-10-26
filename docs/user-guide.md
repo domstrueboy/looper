@@ -32,7 +32,8 @@ The first time you launch the app, you'll see a **Settings** screen:
 6. **Record delay** - how long to wait after you hit record before it
    actually starts capturing, so you have time to get your hands back on
    the guitar. Defaults to **5 seconds**; drag it down to **off** if
-   you'd rather it start immediately.
+   you'd rather it start immediately. With the metronome on, a one-bar
+   count-in takes its place.
 7. **Hold to clear** - how long the button or spacebar has to be held
    down to wipe the loop. Two seconds by default.
 8. **Latency** - how much headroom the audio engine keeps. Lower feels
@@ -139,14 +140,25 @@ the app remembers it. The **Metronome** slider in Settings sets the same
 tempo.
 
 - With no loop, it simply clicks along at the tempo.
-- During the record delay it counts you in, starting from the first beat.
+- Press record and it counts you in: **one bar** of clicks, then
+  recording starts exactly on the next beat one. This replaces the
+  **Record delay** while the metronome is on. Turning the metronome off
+  during the count-in calls it off.
 - When recording starts, the click starts over, so the loop begins on a
   beat. While the loop plays, the click starts over at the top of the
   loop each time round.
 
-For now the loop is still exactly as long as you played it, so unless
-you stop recording right on a beat, the click will stumble once at the
-top of the loop. Making the loop snap to whole bars is coming next.
+With the metronome on, a new loop always comes out a whole number of
+bars, so the click never stumbles at the top. When you press stop, it
+snaps to the nearest bar line:
+
+- **A little late** - the extra is cut off, back to the bar line you
+  just passed.
+- **A little early** - recording carries on to the next bar line. The
+  screen says **Recording to the bar line** while it does. Press again
+  to stop right away; the rest of the bar stays silent.
+
+With the metronome off, a loop is exactly as long as you played it.
 
 ## Your loop is kept
 

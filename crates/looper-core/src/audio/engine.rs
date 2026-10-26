@@ -89,7 +89,6 @@ pub struct InputPath {
     delay: MonitorDelay,
     passthrough: HeapProd<f32>,
     recorder: HeapProd<f32>,
-    capture: HeapProd<f32>,
 }
 
 impl InputPath {
@@ -111,21 +110,18 @@ impl InputPath {
             }
 
             // Held back to match what the passthrough is putting out
-            // right now - see `MonitorDelay`. Both the layer stack and
-            // the UI thread's copy are fed from here, so they still see
-            // the same samples as each other.
+            // right now - see `MonitorDelay`.
             let delayed = &mut self.scratch[..frames];
             self.delay.apply(delayed);
 
+            // Through a pre-roll as well: the count-in's take opens on
+            // the output side, at the bar line, so the ring has to be
+            // flowing by then rather than starting from empty.
             if matches!(
                 self.control.load_state(),
-                LoopState::Recording | LoopState::Overdubbing
+                LoopState::Arming | LoopState::Recording | LoopState::Overdubbing
             ) {
                 self.recorder.push_slice(delayed);
-                let mirrored = self.capture.push_slice(delayed);
-                if mirrored < delayed.len() {
-                    self.control.note_capture_lost(delayed.len() - mirrored);
-                }
             }
         }
     }
@@ -142,6 +138,11 @@ pub struct OutputPath {
     recorded: Vec<f32>,
     passthrough: HeapCons<f32>,
     recorder: HeapCons<f32>,
+    /// What the stack records, passed on to the UI thread's copy. Fed
+    /// from here, after the stack has taken it, so the copy holds exactly
+    /// what was recorded - which only this side knows, now that a
+    /// count-in's take opens here rather than when the state changes.
+    capture: HeapProd<f32>,
     stack: LoopStack,
     metronome: Metronome,
     /// The callback only ever sees the published state, never the
@@ -166,9 +167,25 @@ impl OutputPath {
             }
 
             let state = self.control.load_state();
+            // Every block, on or off: a take ending is rounded to the
+            // bar at the tempo it was played to.
+            self.metronome.set_bpm(self.control.metronome_bpm());
             if state != self.previous_state {
-                apply_state_change(&mut self.stack, &self.control, self.previous_state, state);
-                if matches!(state, LoopState::Arming | LoopState::Recording) {
+                // A count-in may have opened the take already, on the
+                // bar line; Recording arriving then is the UI catching up.
+                let take_open = self.stack.is_recording();
+                let bar = self
+                    .control
+                    .metronome_on()
+                    .then(|| self.metronome.bar_frames());
+                apply_state_change(
+                    &mut self.stack,
+                    &self.control,
+                    self.previous_state,
+                    state,
+                    bar,
+                );
+                if state == LoopState::Arming || (state == LoopState::Recording && !take_open) {
                     self.metronome.restart();
                 }
                 self.previous_state = state;
@@ -193,8 +210,30 @@ impl OutputPath {
             match state {
                 LoopState::Recording => {
                     let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
-                    if n > 0 {
-                        self.stack.record_first_layer(&self.recorded[..n]);
+                    self.stack.record_first_layer(&self.recorded[..n]);
+                    pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
+                }
+                LoopState::Arming => {
+                    // Drained whether or not any of it is kept, so it
+                    // can't back up while the count runs.
+                    let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
+                    let keep_from = if self.stack.is_recording() {
+                        Some(0)
+                    } else if self.control.metronome_on() {
+                        // The count-in's bar line: the take opens on it,
+                        // to the frame, and what came before is dropped.
+                        let line = self.metronome.frames_to_bar_line().filter(|&at| at < frames);
+                        if line.is_some() {
+                            self.stack.begin_first_layer();
+                        }
+                        line
+                    } else {
+                        None
+                    };
+                    if let Some(from) = keep_from {
+                        let take = &self.recorded[from.min(n)..n];
+                        self.stack.record_first_layer(take);
+                        pass_on(&mut self.capture, &self.control, take);
                     }
                 }
                 LoopState::Looping | LoopState::Overdubbing => {
@@ -208,20 +247,18 @@ impl OutputPath {
                         recorded[n..].fill(0.0);
                         let gain = self.control.volume_pct();
                         self.stack.read_mixed_with_overdub(loop_out, recorded, gain);
+                        pass_on(&mut self.capture, &self.control, recorded);
                     } else {
                         self.stack.read_mixed(loop_out, self.control.volume_pct());
                     }
                     mix_add(dry, loop_out);
                 }
-                // Arming captures nothing - the pre-roll is still
-                // counting down on the UI thread.
-                LoopState::Idle | LoopState::Stopped | LoopState::Arming => {}
+                LoopState::Idle | LoopState::Stopped => {}
             }
 
             // Onto the mix, after the loop volume: the click is level
             // with the loop, not scaled by it.
             if self.control.metronome_on() {
-                self.metronome.set_bpm(self.control.metronome_bpm());
                 if matches!(state, LoopState::Looping | LoopState::Overdubbing) {
                     self.metronome
                         .add_on_loop(dry, loop_pos, self.stack.recorded_len());
@@ -309,7 +346,6 @@ pub fn build_audio_path(
             delay: MonitorDelay::new(latency_frames),
             passthrough: passthrough_tx,
             recorder: recorder_tx,
-            capture: capture_tx,
         },
         output: OutputPath {
             control: Arc::clone(control),
@@ -319,6 +355,7 @@ pub fn build_audio_path(
             recorded: vec![0.0f32; SCRATCH_CAPACITY],
             passthrough: passthrough_rx,
             recorder: recorder_rx,
+            capture: capture_tx,
             stack,
             metronome: Metronome::new(sample_rate, settings.metronome_bpm),
             previous_state: LoopState::Idle,
@@ -464,19 +501,28 @@ pub fn build_looper_streams(
 /// Layer bookkeeping that has to happen exactly when the state changes
 /// rather than on every callback: fixing the loop length once the first
 /// recording ends, and opening or closing an overdub layer.
+///
+/// `bar_frames` is set while the metronome is on: a first take played
+/// against it comes out a whole number of its bars.
 fn apply_state_change(
     stack: &mut LoopStack,
     control: &SharedControl,
     from: LoopState,
     to: LoopState,
+    bar_frames: Option<f64>,
 ) {
     match from {
-        LoopState::Recording => stack.finish_first_layer(),
+        LoopState::Recording => match bar_frames {
+            Some(bar) => stack.finish_first_layer_in_bars(bar),
+            None => stack.finish_first_layer(),
+        },
         LoopState::Overdubbing => stack.finish_overdub(),
         _ => {}
     }
     match to {
-        LoopState::Recording => stack.begin_first_layer(),
+        LoopState::Recording if !stack.is_recording() => stack.begin_first_layer(),
+        // A count-in called off after its take had opened.
+        LoopState::Idle if from == LoopState::Arming && stack.is_recording() => stack.clear(),
         LoopState::Overdubbing => {
             if stack.begin_overdub() {
                 // Where this take starts, for the UI thread's copy: it
@@ -486,6 +532,16 @@ fn apply_state_change(
             }
         }
         _ => {}
+    }
+}
+
+/// Hands recorded samples to the UI thread's copy of the loop. A full
+/// ring is counted rather than waited on: that copy no longer matches
+/// what's playing, and saving it would be wrong.
+fn pass_on(capture: &mut HeapProd<f32>, control: &SharedControl, samples: &[f32]) {
+    let passed = capture.push_slice(samples);
+    if passed < samples.len() {
+        control.note_capture_lost(samples.len() - passed);
     }
 }
 

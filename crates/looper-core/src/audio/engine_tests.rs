@@ -187,28 +187,73 @@ fn no_delay_leaves_the_signal_alone() {
 
 /// The layer stack and the UI thread's copy are laid out by two separate
 /// pieces of code that have to agree, which they can only do if they are
-/// handed the same samples in the first place.
+/// handed the same samples in the first place. The copy is fed what the
+/// stack took, after it took it.
 #[test]
-fn the_recorder_and_the_mirror_are_fed_the_same_samples() {
+fn the_mirror_is_fed_exactly_what_the_stack_records() {
     let settings = test_settings();
     let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     control.publish_state(LoopState::Recording);
     let mut next = 1.0;
-    // Only the input half, so nothing drains the recorder ring; two
-    // blocks stay well inside it.
-    for _ in 0..2 {
-        path.input.process(&ramp(&mut next));
+    for _ in 0..4 {
+        drive(&mut path, &ramp(&mut next));
     }
 
-    let mut recorded = vec![0.0f32; BLOCK * 2];
-    let n = path.output.recorder.pop_slice(&mut recorded);
-    let mut mirrored = vec![0.0f32; BLOCK * 2];
+    let mut mirrored = vec![0.0f32; BLOCK * 8];
     let m = captured.pop_slice(&mut mirrored);
+    assert_eq!(m, path.output.stack.recorded_len(), "all of it, and no more");
+    // Held back by the 8-sample monitoring delay, like the take itself.
+    let expected: Vec<f32> = (0..m)
+        .map(|i| if i < 8 { 0.0 } else { (i - 7) as f32 })
+        .collect();
+    assert_eq!(mirrored[..m], expected);
+}
 
-    assert_eq!(n, BLOCK * 2, "both blocks reached the recorder");
-    assert_eq!(recorded[..n], mirrored[..m], "the same samples, delayed alike");
+/// With the metronome on, a pre-roll is a bar's count-in, and the take
+/// opens on the bar line to the sample - here mid-block, where the UI
+/// thread's frame clock would have landed it anywhere.
+#[test]
+fn a_count_in_opens_the_take_on_the_bar_line() {
+    // 130 BPM at 1 kHz: a bar of 1,846.15 frames, so the line falls at
+    // frame 1,846 - half way through a four-frame block.
+    let settings = AppConfig {
+        metronome_bpm: 130,
+        ..test_settings()
+    };
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    control.publish_metronome_on(true);
+
+    control.publish_state(LoopState::Arming);
+    let mut next = 1.0;
+    for _ in 0..(1_846 + 14) / BLOCK {
+        drive(&mut path, &ramp(&mut next));
+    }
+
+    assert_eq!(path.output.stack.recorded_len(), 14, "from the line on");
+    let mut first = [0.0f32; 1];
+    captured.pop_slice(&mut first);
+    // Input sample 1,838 (valued 1,839), heard at frame 1,846 through
+    // the 8-sample monitoring delay.
+    assert_eq!(first[0], 1_839.0);
+}
+
+#[test]
+fn without_the_metronome_a_pre_roll_records_nothing() {
+    // The plain pre-roll is timed on the UI thread, which publishes
+    // Recording itself when it runs out.
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+
+    control.publish_state(LoopState::Arming);
+    let mut next = 1.0;
+    for _ in 0..1_000 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    assert_eq!(path.output.stack.recorded_len(), 0);
 }
 
 /// A driver hands over whole buffers, and a buffer is routinely larger
@@ -260,4 +305,26 @@ fn the_input_and_output_channel_counts_are_independent() {
     let first = latency_frames * 2;
     assert_eq!(out[first], input[0], "delayed by the monitoring delay");
     assert_eq!(out[first], out[first + 1], "and centred across both channels");
+}
+
+#[test]
+fn a_count_in_called_off_after_its_take_opened_leaves_no_loop() {
+    // The take opens here on the bar line; a cancel published before the
+    // UI thread saw it arrives as Arming -> Idle with the take open.
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    control.publish_metronome_on(true);
+    control.publish_state(LoopState::Arming);
+    let mut next = 1.0;
+    for _ in 0..(2_000 + 40) / BLOCK {
+        drive(&mut path, &ramp(&mut next));
+    }
+    assert!(path.output.stack.recorded_len() > 0, "opened");
+
+    control.publish_state(LoopState::Idle);
+    drive(&mut path, &ramp(&mut next));
+
+    assert_eq!(path.output.stack.recorded_len(), 0);
+    assert!(!path.output.stack.is_recording());
 }

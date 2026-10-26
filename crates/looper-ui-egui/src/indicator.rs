@@ -14,6 +14,8 @@ pub struct Readout {
     pub countdown_secs: f32,
     /// How far through the pre-roll, 0.0-1.0, likewise.
     pub arming_fraction: f32,
+    /// Stop was pressed, and recording carries on to the bar line.
+    pub finishing_bar: bool,
 }
 
 /// Label for the main button: what a short press does next, or a trash
@@ -43,6 +45,10 @@ pub fn state_indicator(ui: &mut egui::Ui, readout: &Readout) {
     let (color, label) = match readout.state {
         LoopState::Idle => (egui::Color32::GRAY, "Empty"),
         LoopState::Arming => (egui::Color32::from_rgb(60, 140, 255), "Get ready"),
+        // Says why a press that should have stopped it hasn't, yet.
+        LoopState::Recording if readout.finishing_bar => {
+            (egui::Color32::RED, "Recording to the bar line")
+        }
         LoopState::Recording => (egui::Color32::RED, "Recording"),
         LoopState::Looping => (egui::Color32::from_rgb(40, 200, 40), "Looping"),
         LoopState::Overdubbing => (egui::Color32::from_rgb(255, 110, 40), "Overdubbing"),

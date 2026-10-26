@@ -41,6 +41,19 @@ impl Metronome {
         self.bpm = bpm;
     }
 
+    /// How long a bar is at the current tempo - what a loop recorded
+    /// against the click is rounded to.
+    pub fn bar_frames(&self) -> f64 {
+        self.scheduler.frames_per_bar()
+    }
+
+    /// Frames from where its own count has got to, to the end of the
+    /// first bar - where a count-in's take opens. `None` once past it.
+    pub fn frames_to_bar_line(&self) -> Option<usize> {
+        let line = self.bar_frames().round() as u64;
+        line.checked_sub(self.free_pos).map(|frames| frames as usize)
+    }
+
     /// Counts again from beat one, so the pre-roll's count-in and the
     /// take after it each open on a click.
     pub fn restart(&mut self) {

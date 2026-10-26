@@ -431,3 +431,68 @@ fn a_new_take_forgets_what_redo_could_bring_back() {
 
     assert!(!mirror.can_redo());
 }
+
+#[test]
+fn a_first_take_longer_than_the_loop_is_cut_not_wrapped() {
+    // A take rounded down to the bar: the audio thread cut the excess,
+    // so summing it back over the top would save something nobody heard.
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2, 3, 4, 5]),
+        3,
+        0,
+    );
+    assert_eq!(mirror.layers(), vec![s(&[1, 2, 3])]);
+}
+
+#[test]
+fn a_first_take_shorter_than_the_loop_ends_in_silence() {
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 4, 0);
+    assert_eq!(mirror.layers(), vec![s(&[1, 2, 0, 0])]);
+}
+
+#[test]
+fn a_count_in_called_off_keeps_nothing_it_captured() {
+    let (mut input, mut mirror) = new_mirror();
+    mirror.tick(LoopState::Arming, 0, 0);
+    input.push_slice(&s(&[1, 2]));
+    mirror.tick(LoopState::Arming, 0, 0);
+
+    let out_of_date = mirror.tick(LoopState::Idle, 0, 0);
+
+    assert!(!out_of_date, "nothing to save");
+    assert!(mirror.layers().is_empty());
+}
+
+#[test]
+fn a_count_in_take_becomes_the_loop_once_recording() {
+    // Its samples arrive before the state here says Recording.
+    let (mut input, mut mirror) = new_mirror();
+    mirror.tick(LoopState::Arming, 0, 0);
+    input.push_slice(&s(&[1, 2]));
+    mirror.tick(LoopState::Arming, 0, 0);
+    mirror.tick(LoopState::Recording, 0, 0);
+    input.push_slice(&s(&[3, 4]));
+    mirror.tick(LoopState::Looping, 4, 0);
+    mirror.tick(LoopState::Looping, 4, 0);
+
+    assert_eq!(mirror.layers(), vec![s(&[1, 2, 3, 4])]);
+}
+
+#[test]
+fn a_count_in_called_off_leaves_redo_alone() {
+    // Nothing was replaced, so what redo could bring back still can.
+    let (mut input, mut mirror) = new_mirror();
+    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    mirror.remove_last_layer();
+    mirror.tick(LoopState::Idle, 0, 0);
+
+    mirror.tick(LoopState::Arming, 0, 0);
+    mirror.tick(LoopState::Idle, 0, 0);
+
+    assert!(mirror.can_redo());
+}

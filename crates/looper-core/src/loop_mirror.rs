@@ -107,26 +107,41 @@ impl LoopMirror {
             }
         }
 
-        let capturing = matches!(state, LoopState::Recording | LoopState::Overdubbing);
-        let was_capturing = matches!(
-            self.previous_state,
-            LoopState::Recording | LoopState::Overdubbing
-        );
+        // Arming counts: a count-in's take opens on the audio thread, at
+        // the bar line, before the state here says Recording.
+        let is_capturing = |state| {
+            matches!(
+                state,
+                LoopState::Arming | LoopState::Recording | LoopState::Overdubbing
+            )
+        };
+        let capturing = is_capturing(state);
+        let was_capturing = is_capturing(self.previous_state);
 
         if capturing && !was_capturing {
-            // The new take is recorded into the slot a removed one held.
-            self.removed.clear();
-            if state == LoopState::Recording {
-                // The first take of a new loop replaces everything -
-                // including any doubt about what the old one held.
-                self.finished.clear();
-                self.loop_len = 0;
-                self.lost_samples = false;
-            }
             self.open_take = Some(Vec::new());
-        } else if was_capturing && !capturing {
+            if state == LoopState::Overdubbing {
+                // The new take is recorded into the slot a removed one
+                // held.
+                self.removed.clear();
+            }
+        }
+        if state == LoopState::Recording && self.previous_state != LoopState::Recording {
+            // The first take of a new loop replaces everything -
+            // including any doubt about what the old one held, and what
+            // redo could bring back. Not before: a count-in can still be
+            // called off.
+            self.finished.clear();
+            self.removed.clear();
+            self.loop_len = 0;
+            self.lost_samples = false;
+        }
+        if was_capturing && !capturing {
             let take = self.open_take.take().unwrap_or_default();
-            if !take.is_empty() {
+            if self.previous_state == LoopState::Arming {
+                // A pre-roll called off: whatever its count-in opened
+                // never became a loop.
+            } else if !take.is_empty() {
                 // Overdubs begin wherever playback had reached; a first
                 // take always begins at the top.
                 let start = if self.previous_state == LoopState::Overdubbing {
@@ -198,7 +213,28 @@ impl LoopMirror {
 
     /// Every take laid out as a layer, in order.
     fn layers(&self) -> Vec<Vec<f32>> {
-        self.finished.iter().map(|take| self.layer(take)).collect()
+        self.finished
+            .iter()
+            .enumerate()
+            .map(|(index, take)| {
+                if index == 0 {
+                    self.first_layer(take)
+                } else {
+                    self.layer(take)
+                }
+            })
+            .collect()
+    }
+
+    /// The first take, which set the loop length rather than wrapping
+    /// around one: anything past the length was cut, not summed back
+    /// over the top - a take rounded down to the bar is the case that
+    /// has any. Short of the length, the rest is silence.
+    fn first_layer(&self, take: &Take) -> Vec<f32> {
+        let mut layer = vec![0.0f32; self.loop_len];
+        let n = take.samples.len().min(self.loop_len);
+        layer[..n].copy_from_slice(&take.samples[..n]);
+        layer
     }
 
     /// A take laid out over the whole loop, which is how it's stored and

@@ -89,6 +89,10 @@ impl Scheduler {
         self.frames_per_step
     }
 
+    pub fn frames_per_bar(&self) -> f64 {
+        self.frames_per_step * f64::from(self.pattern.steps_per_bar)
+    }
+
     fn position_of(&self, step: u64) -> u64 {
         (step as f64 * self.frames_per_step).round() as u64
     }

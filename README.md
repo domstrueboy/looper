@@ -306,14 +306,28 @@ you're already in time with it - and a press part-way through calls it
 off, back to Idle.
 
 The countdown runs on the UI thread, which already ticks every frame and
-already works in `Instant`, so no timing code goes anywhere near the
-audio callback: the callback sees `Arming` and captures nothing, exactly
-as it does for `Idle`, until the state flips to `Recording`. `Arming` is
-still a published state of its own rather than being hidden from the
-audio thread, because a metronome count-in eventually needs to click
-during that window. Input is handled before the countdown each frame, so
-a press meant to cancel wins over the countdown happening to run out on
-the same frame.
+already works in `Instant`: the callback keeps nothing until the state
+flips to `Recording`. Input is handled before the countdown each frame,
+so a press meant to cancel wins over the countdown happening to run out
+on the same frame.
+
+With the metronome on, `Arming` is a one-bar **count-in** instead, and
+the roles reverse: the *audio thread* opens the take, on the bar line,
+to the frame - mid-block if that's where it falls - and the UI thread
+moves to `Recording` when it sees the take growing. A UI frame would
+land the start up to ~20 ms late, and the whole loop would sit that far
+off the click for good. Three things make it work:
+
+- The input feeds the recorder ring through `Arming` too, and the
+  output drains it, so the ring is already flowing at the line rather
+  than filling from empty.
+- The UI thread's copy is fed by the *output* path, with exactly what
+  the stack recorded, rather than by the input path - only the output
+  side knows where the take began. The copy opens its take at `Arming`
+  but treats it as a new loop only once the state reaches `Recording`,
+  so a cancelled count-in throws nothing away, redo included.
+- A count-in cancelled after its take opened arrives as `Arming` ->
+  `Idle` with a take open, and the stack drops it.
 
 **Overdub** deliberately sits *off* that cycle, on its own control (the
 `O` key or the Overdub button), so the press cycle above keeps behaving
@@ -396,6 +410,18 @@ volume. What it keeps time with depends on the state:
 
 The click is heard through the output, like the loop, so a part played
 against it is recorded with the same alignment as an overdub.
+
+With the metronome on, a first take comes out a whole number of bars -
+the nearest, at least one. The split is deliberate: the *audio thread*
+rounds (`finish_first_layer_in_bars`), cutting a late stop back and
+letting the recorded window play silence after an early one, so the
+length is exact to the frame. The *UI thread* only decides when to stop:
+if the nearest bar line is still ahead, it holds the state at
+`Recording` until the telemetry passes it, then stops as usual. That
+keeps the input path gated on the published state exactly as before -
+nothing is ever recorded after the state says it has stopped. The mirror
+lays the first take out cut at the loop length rather than wrapped, so
+the saved loop is the one that plays.
 
 ### Recording alignment
 

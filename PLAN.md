@@ -263,11 +263,19 @@ saved loop will want its BPM and bar count stored alongside it.
 This gates the drum machine: drums against a loop with no tempo will
 clash.
 
-The count-in also wants finishing here. Step 5 clicks through the
-pre-roll from beat one, but the pre-roll is still timed in milliseconds
-on the UI thread: it isn't a whole number of beats, and its end lands a
-frame or so off the beat. With the metronome on, it should run whole
-bars, and the take should open on the audio thread at the bar line.
+Split four ways:
+
+- **6a. Snap to bars - done.** With the metronome on, stopping a take
+  lands it on the *nearest* bar line, at least one bar: late, the extra
+  is cut; early, recording carries on to the line. The audio thread
+  rounds; the UI thread only holds off stopping while the line is ahead.
+- **6b. Count-in - done.** With the metronome on, the pre-roll is one
+  bar of clicks instead of the "Record delay" time, and the take opens
+  on the audio thread at the bar line rather than on a UI frame.
+- **6c. Tempo from the loop.** With the metronome off, work the BPM out
+  from the loop's length, plus halve/double buttons.
+- **6d. Save the tempo.** The BPM and bar count beside the saved loop,
+  so a restored loop keeps its grid.
 
 ### 7. Drum machine - extended
 

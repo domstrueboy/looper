@@ -612,3 +612,132 @@ fn the_tempo_stays_inside_its_range() {
     assert_eq!(looper.metronome_bpm(), *METRONOME_BPM_RANGE.start());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Loops in whole bars --------------------------------------------------
+
+/// 120 BPM at 44.1 kHz.
+const BAR: usize = 88_200;
+
+/// Recording with the metronome on: through the bar's count-in, then
+/// `frames` into the take, then a press to stop.
+fn record_against_the_click(name: &str, frames: usize) -> (LooperState, MockDriver, PathBuf, Instant) {
+    let (mut looper, driver, dir) = start(name, &settings());
+    looper.toggle_metronome();
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, BAR, at);
+    feed(&mut looper, &driver, frames, at);
+    assert_eq!(looper.state(), LoopState::Recording, "counted in");
+    press(&mut looper, at, at);
+    (looper, driver, dir, at)
+}
+
+/// `frames` of input, a frame tick after each buffer as the app would:
+/// the UI thread's copy drains a ring that holds only two seconds.
+fn feed(looper: &mut LooperState, driver: &MockDriver, frames: usize, at: Instant) {
+    for _ in 0..frames / 4_096 {
+        driver.cycle(&vec![0.25; 4_096]);
+        looper.tick(false, at);
+    }
+    driver.cycle(&vec![0.25; frames % 4_096]);
+    looper.tick(false, at);
+}
+
+#[test]
+fn stopping_late_cuts_the_loop_back_to_the_bar() {
+    let (mut looper, driver, dir, at) = record_against_the_click("looper-bars-late", 3 * BAR + BAR / 3);
+    assert_eq!(looper.state(), LoopState::Looping, "stops straight away");
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    let (secs, _) = looper.loop_duration_and_progress();
+    assert_eq!(secs, 6.0, "three bars of 2 s");
+    let (saved, _) = crate::wav::read(&config::loop_dir_in(&dir).join("layer-1.wav"))
+        .expect("saved");
+    assert_eq!(saved.len(), 3 * BAR, "and saved that way, not wrapped");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stopping_early_records_on_to_the_bar_line() {
+    let (mut looper, driver, dir, at) =
+        record_against_the_click("looper-bars-early", 3 * BAR + 2 * BAR / 3);
+    assert_eq!(looper.state(), LoopState::Recording, "not yet");
+    assert!(looper.is_finishing_bar());
+
+    feed(&mut looper, &driver, BAR / 3 + 1_000, at);
+    assert_eq!(looper.state(), LoopState::Looping, "past the line");
+    assert!(!looper.is_finishing_bar());
+
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    let (secs, _) = looper.loop_duration_and_progress();
+    assert_eq!(secs, 8.0, "four bars");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_second_press_stops_without_waiting() {
+    let (mut looper, _driver, dir, at) =
+        record_against_the_click("looper-bars-now", 3 * BAR + 2 * BAR / 3);
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Looping);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn with_the_metronome_off_a_loop_is_as_long_as_it_was_played() {
+    let no_preroll = AppConfig {
+        preroll_ms: 0,
+        ..settings()
+    };
+    let (mut looper, driver, dir) = start("looper-bars-off", &no_preroll);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    feed(&mut looper, &driver, BAR + 1_000, at);
+    press(&mut looper, at, at);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+
+    let (secs, _) = looper.loop_duration_and_progress();
+    assert!((secs - (BAR + 1_000) as f32 / 44_100.0).abs() < 0.02, "got {secs}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- Count-in ---------------------------------------------------------------
+
+#[test]
+fn with_the_metronome_on_a_press_counts_in_one_bar_not_the_record_delay() {
+    // The configured delay is a second; the bar is two.
+    let (mut looper, driver, dir) = start("looper-count-in", &settings());
+    looper.toggle_metronome();
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    // Past the record delay, well short of the bar: still counting,
+    // however much time the frames say has gone by.
+    feed(&mut looper, &driver, BAR / 2, at);
+    looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64 + 100));
+    assert_eq!(looper.state(), LoopState::Arming);
+    assert!((looper.preroll_remaining_secs() - 0.9).abs() < 0.01, "a bar of 2 s");
+
+    feed(&mut looper, &driver, BAR / 2 + 1_000, at);
+    assert_eq!(looper.state(), LoopState::Recording, "on the bar line");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn turning_the_metronome_off_calls_a_count_in_off() {
+    let (mut looper, driver, dir) = start("looper-count-in-off", &settings());
+    looper.toggle_metronome();
+    let at = Instant::now();
+    press(&mut looper, at, at);
+
+    looper.toggle_metronome();
+
+    assert_eq!(looper.state(), LoopState::Idle);
+    feed(&mut looper, &driver, 2 * BAR, at);
+    assert_eq!(looper.state(), LoopState::Idle, "and nothing starts later");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -119,6 +119,12 @@ impl LoopStack {
         self.play_pos
     }
 
+    /// Whether a take is open - including a first take a count-in opened
+    /// before the state said Recording.
+    pub fn is_recording(&self) -> bool {
+        self.recording.is_some()
+    }
+
     pub fn layer_count(&self) -> usize {
         self.count
     }
@@ -160,6 +166,33 @@ impl LoopStack {
         self.loop_len = self.layers[index].written;
         self.play_pos = 0;
         self.count = usize::from(self.loop_len > 0);
+    }
+
+    /// Like `finish_first_layer`, but the loop comes out a whole number
+    /// of bars: the nearest to what was played, and at least one. Played
+    /// past it, the excess is cut; short of it, the rest plays as
+    /// silence - the recorded window already makes it so.
+    pub fn finish_first_layer_in_bars(&mut self, bar_frames: f64) {
+        let Some(index) = self.recording else {
+            return;
+        };
+        let written = self.layers[index].written;
+        let capacity = self.capacity();
+        let max_bars = (capacity as f64 / bar_frames).floor();
+        // Nothing to round, or a bar too long to fit even once: keep it
+        // as played.
+        if written == 0 || max_bars < 1.0 {
+            self.finish_first_layer();
+            return;
+        }
+        let bars = (written as f64 / bar_frames).round().clamp(1.0, max_bars);
+        let len = ((bars * bar_frames).round() as usize).min(capacity);
+
+        self.recording = None;
+        self.layers[index].written = written.min(len);
+        self.loop_len = len;
+        self.play_pos = 0;
+        self.count = 1;
     }
 
     /// Starts a layer aligned to the current playback position. False if

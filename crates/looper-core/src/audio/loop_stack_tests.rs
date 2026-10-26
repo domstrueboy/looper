@@ -417,3 +417,50 @@ fn a_clear_cannot_be_redone() {
     stack.clear();
     assert!(!stack.redo_layer());
 }
+
+/// A first take of `played` frames, ended against a 10-frame bar.
+fn first_take_in_bars(played: usize) -> LoopStack {
+    let mut stack = LoopStack::new(64, MAX_LAYERS);
+    stack.begin_first_layer();
+    stack.record_first_layer(&vec![1.0; played]);
+    stack.finish_first_layer_in_bars(10.0);
+    stack
+}
+
+#[test]
+fn a_take_stopped_late_is_cut_back_to_the_bar() {
+    let stack = first_take_in_bars(33);
+    assert_eq!(stack.recorded_len(), 30);
+}
+
+#[test]
+fn a_take_stopped_early_runs_on_to_the_bar_in_silence() {
+    let mut stack = first_take_in_bars(37);
+    assert_eq!(stack.recorded_len(), 40);
+
+    let mut out = [0.0; 40];
+    stack.read_mixed(&mut out, 100);
+    assert_eq!(out[36], 1.0, "what was played");
+    assert_eq!(out[37..], [0.0; 3], "then silence to the bar line");
+}
+
+#[test]
+fn a_take_shorter_than_half_a_bar_still_makes_one_bar() {
+    assert_eq!(first_take_in_bars(3).recorded_len(), 10);
+}
+
+#[test]
+fn a_fractional_bar_rounds_the_length_once() {
+    // Three bars of 10.4 frames is 31.2, not three rounded bars of 10.
+    let mut stack = LoopStack::new(64, MAX_LAYERS);
+    stack.begin_first_layer();
+    stack.record_first_layer(&[1.0; 31]);
+    stack.finish_first_layer_in_bars(10.4);
+    assert_eq!(stack.recorded_len(), 31);
+}
+
+#[test]
+fn bars_stop_at_what_the_loop_can_hold() {
+    // 64 frames hold six 10-frame bars, not the seven 64 rounds to.
+    assert_eq!(first_take_in_bars(64).recorded_len(), 60);
+}

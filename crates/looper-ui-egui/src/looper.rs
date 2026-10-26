@@ -39,6 +39,7 @@ fn readout(looper: &LooperState) -> indicator::Readout {
         progress_fraction,
         countdown_secs: looper.preroll_remaining_secs(),
         arming_fraction: looper.preroll_progress(),
+        finishing_bar: looper.is_finishing_bar(),
     }
 }
 
