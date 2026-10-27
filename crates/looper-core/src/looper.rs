@@ -46,6 +46,11 @@ pub struct LooperState {
     // even while it's still held, which broke long-press-clear from the
     // on-screen button. Set by the renderer, kept here to survive frames.
     button_held: bool,
+    /// The stop control's own handler, so it has a hold of its own:
+    /// press stops, hold clears. Its key and button, likewise.
+    stop_input: InputHandler,
+    stop_key_held: bool,
+    stop_button_held: bool,
     /// The countdown before the first recording starts.
     preroll: Preroll,
     /// Set when stop was pressed with the metronome on and the nearest
@@ -100,6 +105,10 @@ pub struct LooperState {
     underruns: usize,
     /// See `take_in_flight()`.
     take_in_flight: bool,
+    /// A hold asked for an undo, made once the take its press opened is
+    /// seen dropped - until then the stack and the copy could disagree
+    /// on which layer is last.
+    undo_pending: bool,
     /// Holding it is what keeps the audio running; dropping it stops.
     _stream: Box<dyn AudioStream>,
 }
@@ -148,6 +157,11 @@ impl LooperState {
                 settings.long_press_ms,
             ))),
             button_held: false,
+            stop_input: InputHandler::new(Duration::from_millis(u64::from(
+                settings.long_press_ms,
+            ))),
+            stop_key_held: false,
+            stop_button_held: false,
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             stop_at: None,
             count_in: None,
@@ -172,6 +186,7 @@ impl LooperState {
             fault,
             underruns: 0,
             take_in_flight: false,
+            undo_pending: false,
             _stream: streams.stream,
         })
     }
@@ -198,11 +213,17 @@ impl LooperState {
         self.underruns
     }
 
+    /// The main control has been held long enough to undo.
     pub fn is_long_press_active(&self) -> bool {
         self.input_handler.is_long_press_active()
     }
 
-    /// How long the control has to be held to clear, for the hint line.
+    /// The stop control has been held long enough to clear.
+    pub fn is_stop_long_press_active(&self) -> bool {
+        self.stop_input.is_long_press_active()
+    }
+
+    /// How long either control has to be held, for the hint line.
     pub fn long_press_secs(&self) -> f32 {
         self.input_handler.long_press_threshold().as_secs_f32()
     }
@@ -463,6 +484,22 @@ impl LooperState {
         self.button_held = held;
     }
 
+    /// The S key, read by the app each frame as the spacebar is.
+    pub fn set_stop_key_held(&mut self, held: bool) {
+        self.stop_key_held = held;
+    }
+
+    /// Latched like `set_button_held`, for the same reason.
+    pub fn set_stop_button_held(&mut self, held: bool) {
+        self.stop_button_held = held;
+    }
+
+    /// Whether the stop control would do anything, a hold included:
+    /// stopped, there's still a loop to clear.
+    pub fn can_stop_or_clear(&self) -> bool {
+        self.state() != LoopState::Idle
+    }
+
     /// Whether stop was pressed and recording is carrying on to the bar
     /// line - so the screen can say why it hasn't stopped yet.
     pub fn is_finishing_bar(&self) -> bool {
@@ -512,6 +549,15 @@ impl LooperState {
 
         let event = self.input_handler.update(key_held || self.button_held, now);
         self.apply(event, now);
+        // A second stop is the same as one, so a double is two presses.
+        match self
+            .stop_input
+            .update(self.stop_key_held || self.stop_button_held, now)
+        {
+            InputEvent::Press | InputEvent::DoublePress => self.stop(),
+            InputEvent::LongPress => self.clear(),
+            InputEvent::None => {}
+        }
 
         // Deliberately after the input: if a press meant to call the
         // pre-roll off lands on the same frame the countdown runs out,
@@ -570,6 +616,10 @@ impl LooperState {
         if self.mirror.tick(self.state_machine.state()) {
             self.save_loop();
         }
+        if self.undo_pending && !self.take_in_flight {
+            self.undo_pending = false;
+            self.remove_last_layer();
+        }
     }
 
     /// Beside the loop, so it comes back with the tempo it had rather
@@ -599,7 +649,7 @@ impl LooperState {
         match event {
             InputEvent::Press => self.press(now),
             InputEvent::DoublePress => self.double_press(),
-            InputEvent::LongPressClear => self.clear(),
+            InputEvent::LongPress => self.hold(),
             InputEvent::None => {}
         }
     }
@@ -679,6 +729,34 @@ impl LooperState {
         self.stop();
     }
 
+    /// Undo, one layer a hold. The press it started with has already
+    /// acted, so that's taken back first. Held while dubbing, the dub in
+    /// progress is the layer undone; held while recording the first
+    /// take, the take is - leaving the looper empty. A finished first
+    /// take never is: that's a clear, on the stop control.
+    fn hold(&mut self) {
+        let from = self.pressed_from.take();
+        match from {
+            Some(LoopState::Idle | LoopState::Recording) => return self.clear(),
+            // The press called a count-in off: nothing left to undo.
+            Some(LoopState::Arming) => return,
+            _ => {}
+        }
+        // Only the press can have opened a dub that's going now - from
+        // playing, or in REC→DUB as the next layer, the one before it
+        // being what's undone.
+        if self.state() == LoopState::Overdubbing {
+            self.control.request_abandon_take();
+            self.state_machine.toggle_overdub();
+        }
+        // The press played it.
+        if from == Some(LoopState::Stopped) {
+            self.state_machine.press();
+        }
+        self.control.publish_state(self.state_machine.state());
+        self.undo_pending = true;
+    }
+
     /// Where a take stopped now would be rounded up to, if the metronome
     /// is on and that's still ahead - in frames recorded, the same count
     /// the audio thread rounds. Nearer the bar line behind, or past what
@@ -732,6 +810,7 @@ impl LooperState {
     }
 
     fn clear(&mut self) {
+        self.undo_pending = false;
         self.stop_at = None;
         self.count_in = None;
         self.loop_tempo = None;

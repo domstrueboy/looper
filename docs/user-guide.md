@@ -33,8 +33,9 @@ The first time you launch the app, you'll see a **Settings** screen:
    the guitar. Defaults to **4 seconds**; drag it down to **off** if
    you'd rather it start immediately. With the metronome on, a one-bar
    count-in takes its place.
-7. **Hold to clear** - how long the button or spacebar has to be held
-   down to wipe the loop. Two seconds by default.
+7. **Hold to undo / clear** - how long Space or S has to be held
+   down: Space undoes the last layer, S wipes the loop. Two seconds by
+   default.
 8. **Latency** - how much headroom the audio engine keeps. Lower feels
    more immediate; if the sound crackles or drops out, raise it.
 9. **Max loop length** and **Max layers** - the longest loop you can
@@ -71,7 +72,11 @@ they're fully interchangeable. It never stops the loop; that's **Stop**.
 | **Space** | Record, then play and dub in turn - see **Record mode** below. On a stopped loop, play |
 | **S** (or **Stop**) | Stop. A take or a layer in progress is kept; a record delay or count-in is called off |
 | **Space twice quickly** | The same as S - for when you only have one key or pedal |
-| **Hold Space** | Clear the loop, from any state - back to empty. Two seconds by default; the hint line under the buttons says how long yours is set to |
+| **Hold Space** | Undo the last layer - hold again for the one before. Held while dubbing, it undoes the layer you're recording. Never the first recording |
+| **Hold S** (or **Stop**) | Clear the loop, from any state - back to empty |
+
+A hold is two seconds by default (**Hold to undo / clear** in Settings);
+the hint line under the buttons says how long yours is set to.
 
 The round button shows what a press does next: ⏺ records or dubs, ▶
 plays, ⏹ ends the take.
@@ -131,8 +136,8 @@ of its own. When the last layer is reached, the press plays instead.
   press had just started a layer, the second throws it away. On an
   empty looper, a double press leaves it empty.
 - **Undo** drops the most recent layer if you're not happy with it,
-  leaving the others playing. It never takes the first recording - hold
-  Space to clear everything.
+  leaving the others playing - the same as holding Space. It never takes
+  the first recording - hold S to clear everything.
 - **Redo** (**R**) brings an undone layer back, exactly as it was. Undo
   several and they come back newest first. This works until you record
   something new or clear the loop with a long hold - and not after the

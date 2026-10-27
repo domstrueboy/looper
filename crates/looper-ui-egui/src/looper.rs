@@ -46,12 +46,11 @@ fn readout(looper: &LooperState) -> indicator::Readout {
 
 pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
     let mut action = None;
-    let (stop_pressed, redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
+    let (redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
         (
-            // Edge-triggered, unlike the main control: none of these has
-            // a long-press meaning, so there's nothing to time. The
-            // spacebar is read where the looper is ticked, in `main.rs`.
-            i.key_pressed(egui::Key::S),
+            // Edge-triggered, unlike the two pedals: neither has a
+            // long-press meaning, so there's nothing to time. Space and S
+            // are read where the looper is ticked, in `main.rs`.
             i.key_pressed(egui::Key::R),
             i.key_pressed(egui::Key::M),
         )
@@ -135,14 +134,23 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         // Each names its key, like the hint lines do.
-                        let stop_clicked = ui
-                            .add_enabled_ui(looper.can_stop(), |ui| {
-                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Stop (S)"))
+                        // Stop is the second pedal: held like the round
+                        // button, latched the same way, not clicked.
+                        let stop_label = if looper.is_stop_long_press_active() {
+                            "🗑 Cleared"
+                        } else {
+                            "Stop (S)"
+                        };
+                        let stop_response = ui
+                            .add_enabled_ui(looper.can_stop_or_clear(), |ui| {
+                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new(stop_label))
                             })
-                            .inner
-                            .clicked();
-                        if stop_clicked || stop_pressed {
-                            looper.stop();
+                            .inner;
+                        if stop_response.is_pointer_button_down_on() {
+                            looper.set_stop_button_held(true);
+                        }
+                        if !ui.input(|i| i.pointer.primary_down()) {
+                            looper.set_stop_button_held(false);
                         }
 
                         let undo_clicked = ui
@@ -184,7 +192,10 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     RecordMode::RecDub => "Space or button: record / dub / next dub",
                 });
                 ui.label("S or double-tap: stop  |  R: redo");
-                ui.label(format!("Hold Space {:.1}s to clear", looper.long_press_secs()));
+                ui.label(format!(
+                    "Hold {:.1}s - Space: undo  |  S: clear",
+                    looper.long_press_secs()
+                ));
                 ui.label("M: metronome  |  , and . : tempo");
 
                 if looper.mode() == Mode::Extended {

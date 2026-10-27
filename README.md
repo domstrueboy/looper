@@ -246,7 +246,7 @@ crates/
     src/action.rs             what a rendered frame asks the app to do
     src/config.rs             the settings, as TOML in the per-user
                               config dir (config_tests.rs)
-    src/input.rs              press (on the way down) vs long-press-clear
+    src/input.rs              press (on the way down), double, long press
     src/state_machine.rs      the pedal logic - pure, no audio, no egui
     src/tempo.rs              a loop's tempo from its length, and ½ / 2×
     src/preroll.rs            the countdown before the first recording
@@ -311,10 +311,18 @@ It's taken after loading the state and before applying it - a state
 change seen means the request made before it is seen too, so a double
 press's take-back can't land on the layer before the new one.
 
-**Long-press**, from any state, clears the loop and returns to Idle - it
-fires the moment the hold crosses the threshold while still held, not on
-release. How long that hold is is the `long_press_ms` setting, 2s by
-default, and the looper screen's hint line says the configured value.
+A **long press** fires the moment the hold crosses the threshold while
+still held, not on release. How long that is is the `long_press_ms`
+setting, 2s by default, for both controls. Held, **Stop clears** the loop
+from any state, back to Idle - Stop has an `InputHandler` of its own, fed
+by the S key and its button's latch. Held, the **main control undoes**
+the last layer, one per hold. Its press has already acted by then, so
+the hold takes it back first, from `pressed_from` like a double: a dub
+the press opened is abandoned, a stopped loop it played stops again, and
+a first take it ended (or began) goes with the clear it turns into. The
+undo itself waits in `undo_pending` until the abandoned dub is seen
+dropped - `take_in_flight`, as for the Undo button - so the stack and the
+copy agree on which layer is last. Never the first take.
 
 A **double press** - two within 400 ms (`input.rs`) - does what Stop
 does, for one key or pedal. Since a press acts as it goes down, the first
@@ -330,8 +338,8 @@ a single, not two doubles.
 A **press** acts the moment the control goes down, not when it's let
 go. Waiting for the release, to be sure a press wasn't the start of a
 hold, made every take start and stop as late as the key stayed down -
-100-200 ms. Acting at once is safe because a hold turns into a clear,
-which wipes whatever the press had started. A held key doesn't repeat
+100-200 ms. Acting at once is safe because a hold takes back whatever
+the press had started. A held key doesn't repeat
 the press either: `InputHandler` reads whether the control is down, not
 the OS's key-repeat events.
 
@@ -550,7 +558,7 @@ window opened.
 |---|---|---|---|
 | `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched |
 | `preroll_ms` | 4000 | 0-5000 | wait before recording starts; 0 = off |
-| `long_press_ms` | 2000 | 500-4000 | how long a hold clears the loop |
+| `long_press_ms` | 2000 | 500-4000 | how long a hold is: Space to undo, S to clear |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
 | `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"` | REC→PLAY or REC→DUB - see "State machine"; the older `after_take = "play"/"dub"` still reads |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |

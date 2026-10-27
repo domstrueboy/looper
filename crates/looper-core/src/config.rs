@@ -30,7 +30,8 @@ pub const DEFAULT_MAX_LOOP_SECS: u32 = 60;
 pub const MAX_LAYERS_RANGE: RangeInclusive<u32> = 1..=8;
 pub const DEFAULT_MAX_LAYERS: u32 = 4;
 
-/// How long the control has to be held to clear the loop.
+/// How long a control has to be held: the main one to undo a layer, stop
+/// to clear the loop.
 pub const LONG_PRESS_MS_RANGE: RangeInclusive<u32> = 500..=4000;
 pub const DEFAULT_LONG_PRESS_MS: u32 = 2000;
 

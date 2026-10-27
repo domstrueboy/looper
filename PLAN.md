@@ -334,12 +334,12 @@ How the main control behaves, as settings rather than one fixed way.
 
   Space while stopped plays, in every mode. A mode only changes these
   cells; the rest is shared.
-- **7g. Hold to undo, hold to clear - next.** Hold Space undoes the last
+- **7g. Hold to undo, hold to clear - done.** Hold Space undoes the last
   layer, one per hold; hold S clears. A press acts as it goes down, so
   a hold first takes back what its press did - a dub it opened is
   abandoned, as the double press did - then undoes. Holding while
   dubbing counts the dub in progress as the layer undone, and plays.
-- **7h. A layer per pass.** The third record mode: while dubbing, each
+- **7h. A layer per pass - next.** The third record mode: while dubbing, each
   pass closes the layer one loop length after it opened - not at the
   top, so a phrase crossing it stays whole - and opens the next, on
   the audio thread, reported as a take end. With every layer used, the

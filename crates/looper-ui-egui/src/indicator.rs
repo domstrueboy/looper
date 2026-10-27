@@ -21,8 +21,9 @@ pub struct Readout {
     pub dubs_on: bool,
 }
 
-/// Label for the main button: what a short press does next, or a trash
-/// icon while a long-press-clear is being held. Arming gets a cancel
+/// Label for the main button: what a short press does next, or what the
+/// hold did while it's still held - undo, or a trash icon where it
+/// emptied the looper (held while recording the first take). Arming gets a cancel
 /// cross of its own, because a press there throws the pending recording
 /// away rather than stopping one that's under way. A press never stops,
 /// so nothing here shows pause or stop: playing shows record, since a
@@ -32,7 +33,7 @@ pub struct Readout {
 /// limited subset - anything else renders as an empty box.
 pub fn press_button_label(readout: &Readout, long_press_active: bool) -> &'static str {
     if long_press_active {
-        return "🗑";
+        return if readout.state == LoopState::Idle { "🗑" } else { "⟲" };
     }
     match readout.state {
         LoopState::Idle | LoopState::Looping => "⏺",

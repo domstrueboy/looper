@@ -36,7 +36,7 @@ fn holding_past_threshold_yields_long_press_clear_while_still_held() {
     assert_eq!(input.update(true, t0), InputEvent::Press);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(2001)),
-        InputEvent::LongPressClear
+        InputEvent::LongPress
     );
 }
 
@@ -48,7 +48,7 @@ fn releasing_after_long_press_fires_nothing() {
     input.update(true, t0);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(2001)),
-        InputEvent::LongPressClear
+        InputEvent::LongPress
     );
     assert_eq!(
         input.update(false, t0 + Duration::from_millis(2100)),
@@ -64,7 +64,7 @@ fn long_press_fires_only_once_per_hold() {
     input.update(true, t0);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(2001)),
-        InputEvent::LongPressClear
+        InputEvent::LongPress
     );
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(3000)),
@@ -131,7 +131,7 @@ fn can_press_again_after_a_long_press_clear() {
     input.update(true, t0);
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(2001)),
-        InputEvent::LongPressClear
+        InputEvent::LongPress
     );
     input.update(false, t0 + Duration::from_millis(2100));
 

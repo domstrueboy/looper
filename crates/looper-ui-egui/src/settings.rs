@@ -197,7 +197,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     ui.add(
         egui::Slider::new(&mut settings.config.long_press_ms, LONG_PRESS_MS_RANGE)
             .step_by(250.0)
-            .text("Hold to clear")
+            .text("Hold to undo / clear")
             .custom_formatter(|ms, _| format!("{:.2} s", ms / 1000.0)),
     );
     ui.add(

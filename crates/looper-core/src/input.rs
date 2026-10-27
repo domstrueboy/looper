@@ -1,14 +1,15 @@
 use std::time::{Duration, Instant};
 
-/// Turns "is it down right now" into a press and a long-press-clear, like
-/// a real footswitch: the press fires the moment the control goes down,
-/// and holding it on past the threshold clears as well, while still held.
+/// Turns "is it down right now" into a press and a long press, like a
+/// real footswitch: the press fires the moment the control goes down, and
+/// holding it on past the threshold fires the long press as well, while
+/// still held.
 ///
 /// On the way down, not the way up. A press that waited for the release,
 /// to be sure it wasn't the start of a hold, started and stopped every
 /// take as late as the key or foot stayed down: 100-200 ms of it. Acting
-/// at once costs nothing, because whatever the press began is wiped by
-/// the clear a hold turns into.
+/// at once costs nothing, because whoever acts on a long press takes back
+/// whatever the press began.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
     None,
@@ -17,7 +18,7 @@ pub enum InputEvent {
     /// has already been acted on by then - it fired as it went down - so
     /// whoever acts on this one decides what of the first to take back.
     DoublePress,
-    LongPressClear,
+    LongPress,
 }
 
 /// How soon a second press has to follow the first to count as a double:
@@ -50,8 +51,8 @@ impl InputHandler {
         self.long_press_threshold
     }
 
-    /// True from the frame `LongPressClear` fired until release - for UI
-    /// confirming the clear, distinct from the one-shot event itself.
+    /// True from the frame `LongPress` fired until release - for UI
+    /// confirming it, distinct from the one-shot event itself.
     pub fn is_long_press_active(&self) -> bool {
         self.pressed_at.is_some() && self.long_press_fired
     }
@@ -78,7 +79,7 @@ impl InputHandler {
                         && now.duration_since(pressed_at) >= self.long_press_threshold
                     {
                         self.long_press_fired = true;
-                        InputEvent::LongPressClear
+                        InputEvent::LongPress
                     } else {
                         InputEvent::None
                     }
