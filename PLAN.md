@@ -211,11 +211,10 @@ in the order they're fixed:
 - **9f. Thread contract - done.** One table on `SharedControl`: every
   request and level, who sets it, and when and in what order the
   callback reads it; why `Immediate` stores the same 0 as no stop.
-- **9g. Press logic.** First a table-driven test over record mode x
-  state x gesture (press, double, hold, stop, stop-hold) to the
-  resulting state and requests. Then press, double, hold, stop,
-  `end_take` and `clear` move to `looper/pedal.rs` - a child module
-  still sees `LooperState`'s fields, so it's a move, not a redesign.
+- **9g. Press logic - done.** One table-driven test, every record mode
+  x state x gesture (press, double, hold, stop, stop-hold) to the state
+  and layers it leaves - 75 rows, checked against the user guide. Then
+  the gestures moved, unchanged, to `looper/pedal.rs`.
 - **9h. The UI is not a leaf.** `looper_ui_egui::looper::render` takes
   `&mut LooperState` and calls undo, redo, mutes, tempo, levels and the
   mode switch directly; `Action` only carries `Start` and

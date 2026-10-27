@@ -1786,3 +1786,201 @@ fn a_loop_stopped_at_its_end_plays_again_on_a_press() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Every gesture, from every state, in every record mode ------------------
+
+/// What the player does - and, for setting a row up, `Wait` and
+/// `Record`: a quarter of a second of audio, and a first take that long
+/// ended with a press.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Gesture {
+    Press,
+    Double,
+    Hold,
+    Stop,
+    StopHold,
+    Wait,
+    Record,
+}
+
+/// One gesture, then a little audio, so whatever it opened is recording
+/// and whatever it asked of the audio thread has been carried out.
+fn perform(looper: &mut LooperState, driver: &MockDriver, at: &mut Instant, gesture: Gesture) {
+    match gesture {
+        Gesture::Press => single(looper, at),
+        Gesture::Double => double_press(looper, driver, at),
+        Gesture::Hold => hold_space(looper, driver, at),
+        Gesture::Stop => {
+            *at += Duration::from_secs(1);
+            looper.set_stop_key_held(true);
+            looper.tick(false, *at);
+            looper.set_stop_key_held(false);
+            looper.tick(false, *at + Duration::from_millis(50));
+        }
+        Gesture::StopHold => {
+            *at += Duration::from_secs(1);
+            hold_stop(looper, *at);
+            *at += Duration::from_millis(700);
+        }
+        // Long enough that no row's gestures add up to a whole pass,
+        // which a layer per pass would turn into a layer of its own.
+        Gesture::Wait => feed(looper, driver, 10_000, *at),
+        Gesture::Record => {
+            perform(looper, driver, at, Gesture::Press);
+            perform(looper, driver, at, Gesture::Wait);
+            perform(looper, driver, at, Gesture::Press);
+        }
+    }
+    feed(looper, driver, 1_000, *at);
+}
+
+#[test]
+fn every_gesture_from_every_state_in_every_mode() {
+    use Gesture::*;
+    use LoopState::*;
+    use config::RecordMode::*;
+
+    // How each state is reached in each mode.
+    let setups: [(config::RecordMode, LoopState, &[Gesture]); 15] = [
+        (RecPlay, Idle, &[]),
+        (RecPlay, Recording, &[Press, Wait]),
+        (RecPlay, Looping, &[Record]),
+        (RecPlay, Overdubbing, &[Record, Press]),
+        (RecPlay, Stopped, &[Record, Stop]),
+        (RecDub, Idle, &[]),
+        (RecDub, Recording, &[Press, Wait]),
+        (RecDub, Overdubbing, &[Record]),
+        (RecDub, Looping, &[Record, Stop]),
+        (RecDub, Stopped, &[Record, Stop, Stop]),
+        (RecDubPerPass, Idle, &[]),
+        (RecDubPerPass, Recording, &[Press, Wait]),
+        (RecDubPerPass, Overdubbing, &[Record]),
+        (RecDubPerPass, Looping, &[Record, Press]),
+        (RecDubPerPass, Stopped, &[Record, Stop]),
+    ];
+    // Mode, from, gesture -> the state it leaves and the layers kept,
+    // once the audio thread has caught up. Checked against the user
+    // guide's tables; a row changing is a behaviour changing.
+    #[rustfmt::skip]
+    let expected: &[(config::RecordMode, LoopState, Gesture, LoopState, usize)] = &[
+        // REC→PLAY. One layer can't be undone - that's a clear.
+        (RecPlay, Idle, Press, Recording, 0),
+        (RecPlay, Idle, Double, Idle, 0),
+        (RecPlay, Idle, Hold, Idle, 0),
+        (RecPlay, Idle, Stop, Idle, 0),
+        (RecPlay, Idle, StopHold, Idle, 0),
+        (RecPlay, Recording, Press, Looping, 1),
+        (RecPlay, Recording, Double, Stopped, 1),
+        (RecPlay, Recording, Hold, Idle, 0),
+        (RecPlay, Recording, Stop, Stopped, 1),
+        (RecPlay, Recording, StopHold, Idle, 0),
+        (RecPlay, Looping, Press, Overdubbing, 1),
+        (RecPlay, Looping, Double, Stopped, 1),
+        (RecPlay, Looping, Hold, Looping, 1),
+        (RecPlay, Looping, Stop, Stopped, 1),
+        (RecPlay, Looping, StopHold, Idle, 0),
+        (RecPlay, Overdubbing, Press, Looping, 2),
+        (RecPlay, Overdubbing, Double, Stopped, 2),
+        (RecPlay, Overdubbing, Hold, Looping, 1),
+        (RecPlay, Overdubbing, Stop, Stopped, 2),
+        (RecPlay, Overdubbing, StopHold, Idle, 0),
+        (RecPlay, Stopped, Press, Looping, 1),
+        (RecPlay, Stopped, Double, Stopped, 1),
+        (RecPlay, Stopped, Hold, Stopped, 1),
+        (RecPlay, Stopped, Stop, Stopped, 1),
+        (RecPlay, Stopped, StopHold, Idle, 0),
+        // REC→DUB: a press while dubbing dubs the next layer, S steps
+        // down to playing.
+        (RecDub, Idle, Press, Recording, 0),
+        (RecDub, Idle, Double, Idle, 0),
+        (RecDub, Idle, Hold, Idle, 0),
+        (RecDub, Idle, Stop, Idle, 0),
+        (RecDub, Idle, StopHold, Idle, 0),
+        (RecDub, Recording, Press, Overdubbing, 1),
+        (RecDub, Recording, Double, Stopped, 1),
+        (RecDub, Recording, Hold, Idle, 0),
+        (RecDub, Recording, Stop, Stopped, 1),
+        (RecDub, Recording, StopHold, Idle, 0),
+        (RecDub, Overdubbing, Press, Overdubbing, 2),
+        (RecDub, Overdubbing, Double, Looping, 2),
+        (RecDub, Overdubbing, Hold, Looping, 1),
+        (RecDub, Overdubbing, Stop, Looping, 2),
+        (RecDub, Overdubbing, StopHold, Idle, 0),
+        (RecDub, Looping, Press, Overdubbing, 2),
+        (RecDub, Looping, Double, Stopped, 2),
+        (RecDub, Looping, Hold, Looping, 1),
+        (RecDub, Looping, Stop, Stopped, 2),
+        (RecDub, Looping, StopHold, Idle, 0),
+        (RecDub, Stopped, Press, Looping, 2),
+        (RecDub, Stopped, Double, Stopped, 2),
+        (RecDub, Stopped, Hold, Stopped, 1),
+        (RecDub, Stopped, Stop, Stopped, 2),
+        (RecDub, Stopped, StopHold, Idle, 0),
+        // A layer per pass: like REC→PLAY once the take has gone into
+        // its dub.
+        (RecDubPerPass, Idle, Press, Recording, 0),
+        (RecDubPerPass, Idle, Double, Idle, 0),
+        (RecDubPerPass, Idle, Hold, Idle, 0),
+        (RecDubPerPass, Idle, Stop, Idle, 0),
+        (RecDubPerPass, Idle, StopHold, Idle, 0),
+        (RecDubPerPass, Recording, Press, Overdubbing, 1),
+        (RecDubPerPass, Recording, Double, Stopped, 1),
+        (RecDubPerPass, Recording, Hold, Idle, 0),
+        (RecDubPerPass, Recording, Stop, Stopped, 1),
+        (RecDubPerPass, Recording, StopHold, Idle, 0),
+        (RecDubPerPass, Overdubbing, Press, Looping, 2),
+        (RecDubPerPass, Overdubbing, Double, Stopped, 2),
+        (RecDubPerPass, Overdubbing, Hold, Looping, 1),
+        (RecDubPerPass, Overdubbing, Stop, Stopped, 2),
+        (RecDubPerPass, Overdubbing, StopHold, Idle, 0),
+        (RecDubPerPass, Looping, Press, Overdubbing, 2),
+        (RecDubPerPass, Looping, Double, Stopped, 2),
+        (RecDubPerPass, Looping, Hold, Looping, 1),
+        (RecDubPerPass, Looping, Stop, Stopped, 2),
+        (RecDubPerPass, Looping, StopHold, Idle, 0),
+        (RecDubPerPass, Stopped, Press, Looping, 2),
+        (RecDubPerPass, Stopped, Double, Stopped, 2),
+        (RecDubPerPass, Stopped, Hold, Stopped, 1),
+        (RecDubPerPass, Stopped, Stop, Stopped, 2),
+        (RecDubPerPass, Stopped, StopHold, Idle, 0),
+    ];
+
+    assert_eq!(expected.len(), setups.len() * 5, "a row for every case");
+
+    let mut wrong = Vec::new();
+    for &(mode, from, setup) in &setups {
+        for gesture in [Press, Double, Hold, Stop, StopHold] {
+            let config = AppConfig {
+                record_mode: mode,
+                ..rec_play(8)
+            };
+            let name = format!("looper-table-{mode:?}-{from:?}-{gesture:?}");
+            let (mut looper, driver, dir) = start(&name, &config);
+            let mut at = Instant::now();
+            for &step in setup {
+                perform(&mut looper, &driver, &mut at, step);
+            }
+            assert_eq!(looper.state(), from, "{mode:?} setup for {from:?}");
+
+            perform(&mut looper, &driver, &mut at, gesture);
+            let got = (looper.state(), looper.layer_count());
+            let want = expected
+                .iter()
+                .find(|row| (row.0, row.1, row.2) == (mode, from, gesture))
+                .map(|row| (row.3, row.4));
+            if want != Some(got) {
+                wrong.push(format!(
+                    "        ({mode:?}, {from:?}, {gesture:?}, {:?}, {}),",
+                    got.0, got.1
+                ));
+            }
+            drop(looper);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+    assert!(
+        wrong.is_empty(),
+        "rows that don't match:\n{}",
+        wrong.join("\n")
+    );
+}

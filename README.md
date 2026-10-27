@@ -246,6 +246,8 @@ crates/
   looper-core/               the pedal itself - no cpal, no egui
     src/looper.rs             looper-screen state: state machine, the
                               audio relay, the live stream, per-frame tick
+    src/looper/pedal.rs       what press, double, hold and stop do, from
+                              every state in every record mode
     src/settings.rs           settings-screen state: backend/device/rate
                               lists and what's selected
     src/action.rs             what a rendered frame asks the app to do
