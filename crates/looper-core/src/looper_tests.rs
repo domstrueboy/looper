@@ -1137,3 +1137,73 @@ fn a_dub_the_first_tap_had_already_recorded_into_is_thrown_away() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Stop -----------------------------------------------------------------
+
+#[test]
+fn stop_ends_a_dub_in_one_press_and_keeps_it() {
+    let (mut looper, driver, dir) = start("looper-stop-dub", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+
+    looper.stop();
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 2, "the dub kept");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stop_while_playing_in_the_dub_cycle_stops_rather_than_dubs() {
+    let (mut looper, driver, dir) = start("looper-stop-playing", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!(looper.state(), LoopState::Looping);
+
+    looper.stop();
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 2);
+    assert!(!looper.can_stop(), "nothing left to stop");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stop_ends_the_take_and_keeps_it_rather_than_dubbing() {
+    let (mut looper, driver, dir) = start("looper-stop-take", &dub_after_take(4));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+
+    looper.stop();
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.layer_count(), 1);
+    assert!(looper.loop_duration_and_progress().0 > 0.0, "the take kept");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stop_calls_off_a_pre_roll() {
+    let (mut looper, _driver, dir) = start("looper-stop-preroll", &settings());
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    looper.stop();
+    looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64 * 2));
+
+    assert_eq!(looper.state(), LoopState::Idle, "and it doesn't start later");
+    let _ = std::fs::remove_dir_all(&dir);
+}

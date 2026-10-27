@@ -236,6 +236,35 @@ impl LooperState {
         self.control.publish_state(self.state_machine.state());
     }
 
+    /// Whether the stop control would do anything: something has to be
+    /// playing, recording or counting in.
+    pub fn can_stop(&self) -> bool {
+        !matches!(self.state(), LoopState::Idle | LoopState::Stopped)
+    }
+
+    /// The stop control, the same in both cycles and in one press: a
+    /// take or a dub ends and is kept, a count-in is called off. The
+    /// double press does the same for one key; this is the second pedal.
+    pub fn stop(&mut self) {
+        match self.state() {
+            LoopState::Idle | LoopState::Stopped => return,
+            // Now, not at the bar line: the length is still rounded,
+            // there's just nothing left to play out.
+            LoopState::Recording => {
+                self.stop_at = None;
+                self.end_take(false);
+                self.state_machine.press();
+            }
+            LoopState::Arming => {
+                self.state_machine.press();
+                self.preroll.cancel();
+                self.count_in = None;
+            }
+            LoopState::Looping | LoopState::Overdubbing => self.state_machine.press(),
+        }
+        self.control.publish_state(self.state_machine.state());
+    }
+
     pub fn is_metronome_on(&self) -> bool {
         self.metronome_on
     }

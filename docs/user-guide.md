@@ -31,7 +31,7 @@ The first time you launch the app, you'll see a **Settings** screen:
    signal
 6. **Record delay** - how long to wait after you hit record before it
    actually starts capturing, so you have time to get your hands back on
-   the guitar. Defaults to **5 seconds**; drag it down to **off** if
+   the guitar. Defaults to **4 seconds**; drag it down to **off** if
    you'd rather it start immediately. With the metronome on, a one-bar
    count-in takes its place.
 7. **Hold to clear** - how long the button or spacebar has to be held
@@ -138,7 +138,12 @@ A few things worth knowing:
   press had just started an overdub, the second throws it away. On an
   empty looper, a double press leaves it empty. With every layer used, a
   single press does nothing - double-press to stop. The hint lines under
-  the buttons show which way Space is working.
+  the buttons show which way Space is working, and the round button
+  shows where a press goes: ⏺ while playing, ▶ while overdubbing.
+- **Stop** (**S**) always stops in one press, in either mode - the NUX's
+  second footswitch. A take or an overdub in progress is kept; a
+  count-in or record delay is called off. In Overdub mode it's the way
+  out when a double-tap is awkward.
 - Every layer plays at the level you recorded it, so play each one at
   the volume you want it in the mix. If the stack ends up too loud
   overall, turn **Loop volume** down in Settings - it covers the whole

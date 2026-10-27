@@ -317,6 +317,12 @@ so a double never leaves a sliver of a layer. Three quick presses are a double a
 two doubles. Outside the dub cycle a single press already stops, so a
 double is just two presses.
 
+**Stop** (`S` or its button, `LooperState::stop`) is the NUX's second
+footswitch: one press, either cycle, from any state that plays,
+records or counts in. Unlike the double it *keeps* what's in progress -
+nothing of it was started by mistake - so a dub is finished, a take is
+ended (rounded as usual) and both stop at once.
+
 A **press** acts the moment the control goes down, not when it's let
 go. Waiting for the release, to be sure a press wasn't the start of a
 hold, made every take start and stop as late as the key stayed down -
@@ -329,7 +335,7 @@ the OS's key-repeat events.
 
 ### Pre-roll
 
-With a **record delay** set in Settings (5s by default), the flow goes
+With a **record delay** set in Settings (4s by default), the flow goes
 through **Arming** instead: a bar fills as the wait runs out, then
 Recording. It's for the first recording only - once a loop is playing
 you're already in time with it - and a press part-way through calls it
@@ -549,7 +555,7 @@ window opened.
 | Setting | Default | Range | Effect |
 |---|---|---|---|
 | `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched |
-| `preroll_ms` | 5000 | 0-5000 | wait before recording starts; 0 = off |
+| `preroll_ms` | 4000 | 0-5000 | wait before recording starts; 0 = off |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold clears the loop |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
 | `after_take` | `"play"` | `"play"`, `"dub"` | what the press ending the first take does next |

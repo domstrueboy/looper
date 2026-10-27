@@ -312,7 +312,42 @@ How the main control behaves, as settings rather than one fixed way.
 - **7b. Dub mode - done.** "After recording: Play / Overdub" in
   Settings. With Overdub the main control is the NUX's footswitch:
   record, dub, play, dub, play - every dub a layer - and a double press
-  stops, taking back a dub its first half had just opened.
+  stops, taking back a dub its first half had just opened. A **Stop**
+  control (S, and a button) stops in one press in either mode, keeping
+  what was in progress - the NUX's second footswitch.
+- **7f. Two pedals - next.** 7b grew two ways to stop and two to dub;
+  this replaces them with the two-pedal layout most loopers share.
+  Space never stops; **S** always does, keeping what's in progress. A
+  **double press** of Space always does exactly what S does - no
+  setting - after taking back what its first half started: a dub it
+  opened is abandoned, a take or a count-in it began on an empty looper
+  leaves it empty. The O key and the Overdub button go. R becomes Redo (Y
+  goes); the row is Stop (S) | Undo | Redo (R). Undo (= today's Remove)
+  never takes the first take - clearing is a hold. "After recording"
+  becomes **Record mode**, three choices:
+
+  | Mode | After the take | Space while dubbing | Space while playing | S / double Space |
+  |---|---|---|---|---|
+  | REC→PLAY | plays | keeps the layer, plays | dubs a new layer | stops |
+  | REC→DUB | dubs | keeps the layer, dubs the next | dubs a new layer | dubbing → plays; playing → stops |
+  | REC→DUB, a layer per pass | dubs | keeps the layer, plays | dubs a new layer | stops |
+
+  Space while stopped plays, in every mode. A mode only changes these
+  cells; the rest is shared.
+- **7g. Hold to undo, hold to clear.** Hold Space undoes the last
+  layer, one per hold; hold S clears. A press acts as it goes down, so
+  a hold first takes back what its press did - a dub it opened is
+  abandoned, as the double press did - then undoes. Holding while
+  dubbing counts the dub in progress as the layer undone, and plays.
+- **7h. A layer per pass.** The third record mode: while dubbing, each
+  pass closes the layer one loop length after it opened - not at the
+  top, so a phrase crossing it stays whole - and opens the next, on
+  the audio thread, reported as a take end. With every layer used, the
+  last one keeps taking passes rather than dubbing stopping. Default
+  `max_layers` goes to 8 (the mute keys already reach 8; ~10 MB per
+  layer at 60 s). Silent passes are kept for now - Hold Space removes
+  them; auto-dropping needs a threshold a noisy high-gain signal won't
+  fool.
 - **7c. Record start mode.** One setting: *Instant*, *Delay* (today's
   Record delay), *Count-in* (today's, one bar) or *Detect* - recording
   opens when the input crosses a level, so you don't have to press and
@@ -321,7 +356,8 @@ How the main control behaves, as settings rather than one fixed way.
   part on an off-beat, which is why it's a choice, not the default.
 - **7d. Stop mode.** *Immediate* (today's), *At the loop end*, or *Fade
   out* over a few seconds. Fades scale the loop bus on the audio thread;
-  the loop end is known to the frame.
+  the loop end is known to the frame. Applies to every stop: the single
+  press, the double, and the Stop control.
 - **7e. Exact take edges in the saved copy - done.** The audio thread
   reports each take's end on a ring of its own - how many samples were
   its, and whether it was a first take, an overdub, dropped or a clear -

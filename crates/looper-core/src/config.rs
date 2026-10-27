@@ -12,7 +12,7 @@ pub const DEFAULT_VOLUME_PCT: u32 = 100;
 /// Wait before recording starts. Long enough by default to put a guitar
 /// back on and be ready; zero turns it off.
 pub const PREROLL_MS_RANGE: RangeInclusive<u32> = 0..=5000;
-pub const DEFAULT_PREROLL_MS: u32 = 5000;
+pub const DEFAULT_PREROLL_MS: u32 = 4000;
 
 /// Headroom between the input and output callbacks, to absorb timing
 /// jitter. The setting to raise when the log complains about underruns -
