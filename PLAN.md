@@ -205,9 +205,12 @@ warning from that.
 - **10c. Cycles - done.** Every record start, the bar rounding, each
   record mode and stop mode through its cycle, by ear; what a restart,
   Settings and a killed app keep and drop.
-- **10d. Hardware.** The by-ear pass, owed twice; an interface
-  unplugged mid-loop; a USB foot pedal's keys; WASAPI with no ASIO;
-  Bluetooth headphones. Findings feed step 11.
+- **10d. Hardware - done.** The by-ear pass, owed since v1; an
+  interface unplugged mid-loop; a USB foot pedal's keys; WASAPI with no
+  ASIO; Bluetooth headphones - and a *Carry forward* table for what step
+  11 needs from them.
+- **10e. The run.** The whole plan, at the real rig, with a local
+  release build; findings fixed one at a time, failed rows re-run.
 
 ### 11. Release 0.2
 

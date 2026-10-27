@@ -20,9 +20,11 @@ device and a restart do.
 - Space and the round button are interchangeable, as are S and **Stop**:
   try each row with the key, and spot-check a few with the button.
 
-**You need:** the release build (`looper_pedal.exe`), an audio
+**You need:** the release build - `cargo build --release -p looper-app`
+in the repo, which leaves `target\release\looper_pedal.exe` - an audio
 interface with an ASIO driver, a guitar plugged into one of its inputs,
-and headphones or monitors on its output.
+and headphones or monitors on its output. Sections 11-13 need more, and
+say what.
 
 **Start clean:** close the app, then delete
 `%APPDATA%\looper-pedal\` (the config and any saved loop), so the app
@@ -143,6 +145,74 @@ A loop of two layers playing, **REC > PLAY**.
 | K4 | With a loop saved: change **Sample rate**, **Start** | No loop - dropped, not played at the wrong speed | |
 | K5 | A loop of three layers saved: set **Max layers** to 2, **Start** | Two layers back; the third is dropped | |
 | K6 | **Undo**, close the app, open it | **Redo** is greyed: what undo dropped doesn't survive a restart | |
+
+## 9. By ear
+
+The pass owed since v1: the move to `f32` and the swap onto the device
+layer each changed everything the signal passes through, and only ears
+on real hardware can say the result is right. ASIO, the latency at its
+default, metronome on at 120 BPM unless the row says.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| H1 | Record four bars against the click, then let it loop for two minutes | Click and loop stay locked together - no drift, no flam creeping in | |
+| H2 | Stack four layers, each a tight muted strum on every beat | The strums land together, layer on layer - no smear that grows with each one | |
+| H3 | Record a loop ending on a chord that rings across the top | No click, gap or bump at the seam, pass after pass | |
+| H4 | Play through the app for ten minutes - live, looping, dubbing | **Audio fell behind** never appears. If it does: raise **Latency** until it doesn't, and note the lowest that holds | |
+| H5 | Play live, with nothing recorded | The monitoring delay is small enough to play through comfortably | |
+
+## 10. An interface unplugged
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| U1 | With a loop playing, unplug the interface | A red **Audio stopped: ...** line and **Choose a device** under the title; the app itself keeps responding | |
+| U2 | Plug it back in, **Choose a device**, **Start** | The loop is back, **Stopped**, every layer | |
+| U3 | As U1, but in the middle of a dub | Afterwards, every layer before the dub is back; the dub itself is lost | |
+
+## 11. A USB foot pedal
+
+You need: a USB foot pedal or presentation clicker - the kind that
+types keys.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| F1 | Open Notepad and press each switch | Note in *Carry forward* what each one types - often PageDown and PageUp, sometimes arrows, B or Space | |
+| F2 | Hold a switch down in Notepad for three seconds | Note whether the key repeats while held, or arrives once - a pedal that sends down and up together can't hold, so hold-to-undo won't work from it | |
+| F3 | If the pedal can be set to Space and S: do, and play a loop from it | Press, double press and hold all work from your foot as they do from the keyboard | |
+
+## 12. A laptop with no ASIO
+
+You need: a Windows laptop with no ASIO driver installed, and the same
+exe copied to it.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| W1 | Open the app | Settings, with no **Driver** row - WASAPI is the only one - an **Input** and an **Output** picker, and the amber note | |
+| W2 | Look at what **Input** picked by itself | Note its name. If it's a "Loop-back", "Stereo Mix" or similar, it records what's playing, not you - pick the real input and note that it was needed | |
+| W3 | Record and stack three layers against the click | Note how loose it feels against ASIO | |
+| W4 | Play for five minutes at the default latency | Note whether **Audio fell behind** appears, and the lowest **Latency** that keeps it away | |
+
+## 13. Bluetooth headphones
+
+You need: Bluetooth headphones, paired with the machine.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| BT1 | WASAPI, the headphones as **Output**: play live | Note how far behind your playing it sounds: playable, distracting, or unusable | |
+| BT2 | Look at the **Output** list | Note exactly how the headphones are named - every entry they appear as. Step 11's warning has to recognise them | |
+| BT3 | If the headphones' microphone shows as an **Input**, or the sound drops to telephone quality | Note it: that's the headset profile, and the warning should mention it | |
+
+## Carry forward
+
+Step 11 builds on these, so fill them in even if every row passed.
+
+| What | Found |
+|---|---|
+| Keys the foot pedal sends (F1), and whether it repeats when held (F2) | |
+| Lowest latency with no underruns: ASIO (H4), WASAPI (W4) | |
+| What WASAPI picked as **Input** by itself (W2) | |
+| How the Bluetooth headphones are named (BT2), and how bad they sound (BT1) | |
+| Whether cancelling a fade clicks (T6) | |
 
 ## Findings
 
