@@ -16,6 +16,7 @@ use crate::config::{
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
+use crate::tap_tempo::TapTempo;
 use crate::tempo::LoopTempo;
 
 /// 4/4, as the metronome counts it.
@@ -67,6 +68,7 @@ pub struct LooperState {
     /// A stop the audio thread is carrying out - playing on to the loop
     /// end, or fading. The state says Looping until it reports done.
     stop_pending: bool,
+    taps: TapTempo,
     /// The state the last single press acted from. A double press is two
     /// presses with the first already acted on, so it needs to know what
     /// that first one changed to take it back.
@@ -179,6 +181,7 @@ impl LooperState {
             stop_at: None,
             audio_start: None,
             stop_pending: false,
+            taps: TapTempo::new(),
             pressed_from: None,
             loop_tempo: None,
             // A saved loop has a length but no tempo yet; guessed once
@@ -479,11 +482,23 @@ impl LooperState {
         if self.tempo_is_the_loops() {
             return;
         }
-        let bpm = self
-            .config
-            .metronome_bpm
-            .saturating_add_signed(delta)
-            .clamp(*METRONOME_BPM_RANGE.start(), *METRONOME_BPM_RANGE.end());
+        self.set_metronome_bpm(self.config.metronome_bpm.saturating_add_signed(delta));
+    }
+
+    /// A tap of the tempo key. From the second tap of a count on, the
+    /// configured tempo follows the taps - whole BPM like the buttons,
+    /// and saved the same way. Not while a loop sets the tempo.
+    pub fn tap_tempo(&mut self, now: Instant) {
+        if self.tempo_is_the_loops() {
+            return;
+        }
+        if let Some(bpm) = self.taps.tap(now) {
+            self.set_metronome_bpm(bpm.round() as u32);
+        }
+    }
+
+    fn set_metronome_bpm(&mut self, bpm: u32) {
+        let bpm = bpm.clamp(*METRONOME_BPM_RANGE.start(), *METRONOME_BPM_RANGE.end());
         if bpm == self.config.metronome_bpm {
             return;
         }

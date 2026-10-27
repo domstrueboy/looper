@@ -2,6 +2,7 @@ use looper_core::action::Action;
 use looper_core::config::{Mode, RecordMode};
 
 use looper_core::looper::LooperState;
+use std::time::Instant;
 use crate::indicator;
 
 /// The secondary buttons share a size, so the row can be measured and
@@ -9,9 +10,10 @@ use crate::indicator;
 const CONTROL_BUTTON_SIZE: [f32; 2] = [88.0, 24.0];
 
 /// The metronome row: a toggle naming its tempo, between a slower and a
-/// faster button.
-const METRONOME_BUTTON_SIZE: [f32; 2] = [170.0, 24.0];
+/// faster button, then tap tempo.
+const METRONOME_BUTTON_SIZE: [f32; 2] = [150.0, 24.0];
 const TEMPO_BUTTON_SIZE: [f32; 2] = [24.0, 24.0];
+const TAP_BUTTON_SIZE: [f32; 2] = [52.0, 24.0];
 
 /// Square, so up to eight fit across the window in one row.
 const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
@@ -201,7 +203,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     "Hold {:.1}s - Space: undo  |  S: clear",
                     looper.long_press_secs()
                 ));
-                ui.label("M: metronome  |  , and . : tempo");
+                ui.label("M: metronome  |  , . : tempo  |  T: tap");
 
                 if looper.mode() == Mode::Extended {
                     extended_area(ui, looper);
@@ -221,14 +223,24 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
 fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bool) {
     // `,` and `.` sit under `<` and `>` on most layouts. Read as
     // presses, so holding one repeats.
-    let (slower_pressed, faster_pressed) = ui
-        .ctx()
-        .input(|i| (i.key_pressed(egui::Key::Comma), i.key_pressed(egui::Key::Period)));
+    let (slower_pressed, faster_pressed, tap_pressed) = ui.ctx().input(|i| {
+        (
+            i.key_pressed(egui::Key::Comma),
+            i.key_pressed(egui::Key::Period),
+            // Not a repeat: holding T isn't tapping.
+            i.events.iter().any(|event| {
+                matches!(
+                    event,
+                    egui::Event::Key { key: egui::Key::T, pressed: true, repeat: false, .. }
+                )
+            }),
+        )
+    });
 
     // Measured and allocated like the control row, to center it.
     let spacing = ui.spacing().item_spacing.x;
     let row = egui::vec2(
-        METRONOME_BUTTON_SIZE[0] + TEMPO_BUTTON_SIZE[0] * 2.0 + spacing * 2.0,
+        METRONOME_BUTTON_SIZE[0] + TEMPO_BUTTON_SIZE[0] * 2.0 + TAP_BUTTON_SIZE[0] + spacing * 3.0,
         METRONOME_BUTTON_SIZE[1],
     );
     let from_loop = looper.tempo_is_the_loops();
@@ -284,6 +296,16 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
             } else {
                 looper.change_metronome_bpm(1);
             }
+        }
+
+        // On the way down, like the pedals: a tap's time is when it
+        // landed, and a click's release comes a varying while later.
+        let tap = ui
+            .add_enabled(!from_loop, egui::Button::new("Tap (T)").min_size(TAP_BUTTON_SIZE.into()))
+            .on_hover_text("Tap the beat, two or more times");
+        let tap_down = tap.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_pressed());
+        if tap_down || (tap_pressed && !from_loop) {
+            looper.tap_tempo(Instant::now());
         }
     });
 }

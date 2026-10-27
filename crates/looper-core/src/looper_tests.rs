@@ -603,6 +603,35 @@ fn the_tempo_changes_live_and_is_saved() {
 }
 
 #[test]
+fn tapping_sets_the_tempo_and_saves_it() {
+    let (mut looper, _driver, dir) = start("looper-tap", &settings());
+    let t0 = Instant::now();
+    looper.tap_tempo(t0);
+    assert_eq!(looper.tempo(), f64::from(config::DEFAULT_METRONOME_BPM), "one tap: nothing yet");
+
+    looper.tap_tempo(t0 + Duration::from_millis(600));
+    looper.tap_tempo(t0 + Duration::from_millis(1_190));
+
+    // Gaps of 600 and 590 ms: 595 on average, 100.8 BPM, whole.
+    assert_eq!(looper.tempo(), 101.0);
+    let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
+    assert_eq!(saved.metronome_bpm, 101);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn tapping_is_ignored_while_a_loop_sets_the_tempo() {
+    let (mut looper, _driver, dir, at) = free_take("looper-tap-loop", 88_200);
+    let tempo = looper.tempo();
+
+    looper.tap_tempo(at);
+    looper.tap_tempo(at + Duration::from_millis(300));
+
+    assert_eq!(looper.tempo(), tempo, "the loop's, still");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_tempo_stays_inside_its_range() {
     let (mut looper, _driver, dir) = start("looper-tempo-range", &settings());
     looper.change_metronome_bpm(-1_000);

@@ -250,6 +250,7 @@ crates/
     src/state_machine.rs      the pedal logic - pure, no audio, no egui
     src/tempo.rs              a loop's tempo from its length, and ½ / 2×
     src/preroll.rs            the countdown before the first recording
+    src/tap_tempo.rs          a tempo from taps: the last four gaps, averaged
     src/loop_mirror.rs        the UI thread's own copy of the loop, and
                               saving it (loop_mirror_tests.rs)
     src/wav.rs                mono 32-bit PCM, by hand (wav_tests.rs)

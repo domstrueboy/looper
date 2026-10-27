@@ -366,7 +366,7 @@ How the main control behaves, as settings rather than one fixed way.
 
 ### 8. Tempo and levels - mini
 
-- **8a. Tap tempo.** A key tapped two or more times sets the tempo from
+- **8a. Tap tempo - done.** A key tapped two or more times sets the tempo from
   the gaps between taps. Not while a loop sets the tempo.
 - **8b. Levels on screen.** Click volume (fixed at half scale today)
   and loop volume (only in Settings today) as live controls on the

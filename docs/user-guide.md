@@ -180,6 +180,11 @@ going. It changes straight away, even while the click is playing, and
 the app remembers it. The **Metronome** slider in Settings sets the same
 tempo.
 
+Or **tap** it: press **T** (or click **Tap**) on the beat, two or more
+times, and the tempo follows your taps - the last four gaps, averaged,
+so it settles as you keep tapping. Pause for two seconds and the next
+tap starts a fresh count.
+
 - With no loop, it simply clicks along at the tempo.
 - For a count-in before the first recording, set **Record start** to
   **Count-in**: **one bar** of clicks, then recording starts exactly on
@@ -204,8 +209,8 @@ is 1, 2, 4 or 8 bars, whichever gives a tempo between 70 and 140 BPM,
 and the metronome button shows the result, e.g. **92.3 BPM**. Turn the
 click on and it fits the loop exactly.
 
-While there's a loop, the loop sets the tempo, so **−** and **+** become
-**½** and **2×**: if the guess is twice too fast or too slow, halve or
+While there's a loop, the loop sets the tempo, so **Tap** is greyed out
+and **−** and **+** become **½** and **2×**: if the guess is twice too fast or too slow, halve or
 double it (the **,** and **.** keys do the same). A loop recorded with
 the metronome on keeps the tempo it was played to - nothing is guessed.
 Clear the loop and the tempo goes back to the one you set.
