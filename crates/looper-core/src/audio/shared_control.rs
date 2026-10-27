@@ -4,8 +4,37 @@ use crate::config::StopMode;
 use crate::state_machine::LoopState;
 
 /// Lock-free relay across the UI/audio thread boundary. The state machine
-/// stays single-owner on the UI thread (`looper.rs`); only its resulting
-/// value and a one-shot clear flag cross, via atomics, never a lock.
+/// stays single-owner on the UI thread (`looper.rs`); its value, the
+/// requests it makes and the levels it sets cross as atomics, never a
+/// lock.
+///
+/// The whole contract, in the order the output callback reads it each
+/// block. A *request* is one-shot - swapped out as it's read; a *level*
+/// holds until changed.
+///
+/// | What | Kind | Set by the UI thread | Read by the output callback |
+/// |---|---|---|---|
+/// | `metronome_bpm`, `click_volume_pct` | level | as the tempo or level changes; the tempo every frame too | first, before any state change - a take ending rounds to the bar at the tempo it was played to |
+/// | `state` | level | on every change | next; the input callback reads it too, to feed the recorder |
+/// | `next_layer_requested` | request | a press in REC→DUB while dubbing | before the state change, so a double press's take-back lands on the layer the press opened; dropped unless it was dubbing |
+/// | `abandon_take_requested` | request | *before* publishing the change that ends the take | only on seeing a state change |
+/// | `metronome_on` | level | M | on a state change, to round a take to the bar; and at the click |
+/// | `clear_requested` | request | *after* publishing Idle | after the state change |
+/// | `remove_layer_requested`, then `redo_layer_requested` | request | undo, redo | after the clear; both in one block means remove, then redo |
+/// | `muted_layers` | level | a layer's mute | after redo |
+/// | `volume_pct` | level | the loop level | while the loop plays |
+/// | `pending_stop` | level | a stop that isn't immediate; cancelled before publishing any state leaving it | only while Looping, every block until done |
+///
+/// And the other way, audio -> UI:
+///
+/// | What | Written | Read by the UI thread |
+/// |---|---|---|
+/// | `stop_done` | as the pending stop finishes; cleared by the UI before the next request | each frame: publishes Stopped |
+/// | `loop_len`, `play_pos`, `layer_count`, then `take_open` | end of every output callback, `take_open` last | each frame; seeing the take closed means seeing its end report too |
+/// | `capture_lost`, `input_underruns`, `output_underruns` | counted, `Relaxed` | drained each frame |
+///
+/// Everything but the counts is Release on store and Acquire on load, so
+/// a request set before a state is published is seen with that state.
 pub struct SharedControl {
     state: AtomicU8,
     clear_requested: AtomicBool,
@@ -144,6 +173,11 @@ impl SharedControl {
     /// Asks the audio thread to stop the playing loop its own way. The
     /// done flag is cleared first, so one left from an earlier stop
     /// can't end this one at once.
+    ///
+    /// `Immediate` stores the same 0 as no stop at all: the UI thread
+    /// carries that one out itself, by publishing Stopped, so there is
+    /// nothing for the audio thread to do - and `LooperState::stop`
+    /// never asks for it.
     pub fn request_stop(&self, mode: StopMode) {
         self.stop_done.store(false, Ordering::Release);
         let level = match mode {

@@ -76,6 +76,11 @@ handful of atomics - no mutex anywhere in the audio path.
   reads `SharedControl`'s published state to decide whether to feed
   captured samples toward the recorder.
 
+Every request and level that crosses, who sets it, and the order the
+output callback reads them in is one table, on `SharedControl` itself -
+the order is load-bearing (an abandon must be seen with the state change
+it rides on, a next-layer before it), so it lives beside the code.
+
 Both callback bodies are `InputPath::process` and `OutputPath::process`,
 which is how the backend reaches them: they implement `looper-hal`'s
 `InputProcessor` and `OutputProcessor`. Those impls live in `looper-core`

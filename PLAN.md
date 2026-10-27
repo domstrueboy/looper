@@ -208,11 +208,9 @@ in the order they're fixed:
   `active_loop_tempo`'s layer-count filter (the tempo is already gone
   whenever the loop is), `can_stop`, `Pattern::METRONOME` and
   `Voice::is_playing`. `Pattern::new` stays - the drums need it.
-- **9f. Thread contract.** One table in `shared_control.rs`: every
-  request and level, who sets it, when the callback reads it and in
-  what order (next layer, then state change with abandon, then clear,
-  remove, redo, mutes, then pending stop inside the playing branch).
-  Plus why `request_stop(Immediate)` stores the same 0 as "none".
+- **9f. Thread contract - done.** One table on `SharedControl`: every
+  request and level, who sets it, and when and in what order the
+  callback reads it; why `Immediate` stores the same 0 as no stop.
 - **9g. Press logic.** First a table-driven test over record mode x
   state x gesture (press, double, hold, stop, stop-hold) to the
   resulting state and requests. Then press, double, hold, stop,
