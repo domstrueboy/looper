@@ -11,6 +11,7 @@ pub mod audio;
 pub mod config;
 pub mod input;
 pub mod loop_mirror;
+pub mod loop_writer;
 pub mod looper;
 pub mod preroll;
 pub mod sample;

@@ -189,12 +189,11 @@ in the order they're fixed:
 - **9a. Hygiene - done.** `cargo fmt` repo-wide, the clippy `as_chunks`
   warning, CRLF working copies back to LF, and `rustfmt.toml` with
   `newline_style = "Unix"` so `cargo fmt` stops preserving CRLF.
-- **9b. Saving stalls the UI thread.** Every take's end rewrites every
-  layer, synchronously, inside `tick`: 8 x 60 s is ~90 MB laid out,
-  encoded and written in one frame, and a layer per pass does it every
-  pass. A press during that frame is read late, so the take it ends or
-  starts lands late. Write only what changed (a new layer, a removed
-  one) and on a writer thread.
+- **9b. Saving off the UI thread - done.** A save wrote every layer
+  inside `tick`, ~90 MB at 8 x 60 s, delaying the presses read in that
+  frame. Now only what changed is written, on `loop_writer.rs`'s thread,
+  which also takes the tempo and the clear's delete so they stay in
+  order.
 - **9c. The copy grows without bound during a dub.** `LoopMirror` keeps
   a take as played, so a five-minute dub over an 8 s loop holds five
   minutes of samples rather than one layer's worth. Fold each pass into
@@ -224,9 +223,10 @@ in the order they're fixed:
 - **9h. The UI is not a leaf.** `looper_ui_egui::looper::render` takes
   `&mut LooperState` and calls undo, redo, mutes, tempo, levels and the
   mode switch directly; `Action` only carries `Start` and
-  `OpenSettings`. Either the screen returns its intents and the app
-  applies them, or AGENTS.md's rule is relaxed - a decision first.
-- **9i. Tests.** `temp_dir` is written three times; one shared test
+  `OpenSettings`. Decided: the screen takes `&LooperState` and returns
+  its intents - the button latches included - and the app applies them,
+  as AGENTS.md says.
+- **9i. Tests.** `temp_dir` is written four times; one shared test
   helper.
 - **9j. Docs.** README's module diagram puts `app.rs` in looper-core
   and lacks `tempo.rs`, `tap_tempo.rs`, `metronome.rs`, `scheduler.rs`

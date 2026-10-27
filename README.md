@@ -252,7 +252,9 @@ crates/
     src/preroll.rs            the countdown before the first recording
     src/tap_tempo.rs          a tempo from taps: the last four gaps, averaged
     src/loop_mirror.rs        the UI thread's own copy of the loop, and
-                              saving it (loop_mirror_tests.rs)
+                              what saving it writes (loop_mirror_tests.rs)
+    src/loop_writer.rs        the saved loop's files, written off the UI
+                              thread (loop_writer_tests.rs)
     src/wav.rs                mono 32-bit PCM, by hand (wav_tests.rs)
     src/sample.rs             f32 <-> 32-bit PCM, one definition
     src/audio/engine.rs       the audio path, and opening a looper on a
@@ -657,12 +659,19 @@ Beside them, `tempo.toml` holds the loop's beat count - only that: the
 tempo follows from it and the loop's length exactly, and saving the BPM
 too would only let the two disagree. It's written when the loop gets its
 tempo and after every ½ / 2×, and left alone by a layer save, which
-clears the WAVs first. Missing, unreadable, or naming a tempo the click
+deletes any WAV past the layers it keeps. Missing, unreadable, or naming a tempo the click
 can't play, and the tempo is guessed from the length instead - which is
 also what a loop saved before the file existed gets.
 
 Written whenever the loop changes, not on the way out, so a crash or a
-kill doesn't lose it. On launch the layers come back and the looper
+kill doesn't lose it - and only what changed: an overdub writes its own
+layer, an undo deletes one file. The writing happens on a thread of its
+own (`loop_writer.rs`), with every file operation on the loop - layers,
+tempo, a clear's delete - queued there in the order asked. Written
+inside a frame, a save of 8 x 60 s held up the presses read in that
+frame, and the takes they started or ended landed late. Closing the
+looper waits for the queue to empty, so the next start loads what was
+written. On launch the layers come back and the looper
 starts **Stopped** - the loop is there, silent until asked for. A saved
 loop is discarded rather than adapted if it was recorded at a different
 sample rate (there's no resampling) or is longer than `max_loop_secs`

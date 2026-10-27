@@ -15,6 +15,7 @@ use crate::config::{
 };
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
+use crate::loop_writer::LoopWriter;
 use crate::preroll::Preroll;
 use crate::state_machine::{LoopState, LoopStateMachine};
 use crate::tap_tempo::TapTempo;
@@ -89,6 +90,8 @@ pub struct LooperState {
     /// The loop as the UI thread sees it, which is the only copy that can
     /// be written to disk - see `LoopMirror`.
     mirror: LoopMirror,
+    /// Every write to the saved loop's directory, off this thread.
+    writer: LoopWriter,
     sample_rate: u32,
     /// The settings this looper was started with. Kept so a change made
     /// from this screen - the mode - can be saved without losing the rest.
@@ -196,6 +199,7 @@ impl LooperState {
             muted_layers: 0,
             metronome_on: false,
             mirror: LoopMirror::new(streams.captured, streams.sample_rate, restored),
+            writer: LoopWriter::new(config::loop_dir_in(&dir)),
             sample_rate: streams.sample_rate,
             config: settings.clone(),
             dir,
@@ -730,23 +734,20 @@ impl LooperState {
     }
 
     /// Beside the loop, so it comes back with the tempo it had rather
-    /// than a fresh guess - a halved one included. Reported and otherwise
-    /// ignored, like a failed loop save.
+    /// than a fresh guess - a halved one included.
     fn save_tempo(&self) {
-        let Some(tempo) = self.loop_tempo else {
-            return;
-        };
-        if let Err(err) = loop_mirror::save_beats(&config::loop_dir_in(&self.dir), tempo.beats()) {
-            eprintln!("could not save the tempo: {err}");
+        if let Some(tempo) = self.loop_tempo {
+            self.writer.save_beats(tempo.beats());
         }
     }
 
-    /// Writes the loop out, so closing the app doesn't lose it. A failure
-    /// is reported and otherwise ignored: it isn't worth interrupting
-    /// playing over.
-    fn save_loop(&self) {
-        if let Err(err) = self.mirror.save(&config::loop_dir_in(&self.dir)) {
-            eprintln!("could not save the loop: {err}");
+    /// Writes out what changed, so closing the app doesn't lose it. A
+    /// failure is reported and otherwise ignored: it isn't worth
+    /// interrupting playing over.
+    fn save_loop(&mut self) {
+        match self.mirror.changes() {
+            Ok(save) => self.writer.save(save),
+            Err(err) => eprintln!("could not save the loop: {err}"),
         }
     }
 
@@ -942,7 +943,7 @@ impl LooperState {
         self.control.request_clear();
         self.forget_mutes_from(0);
         self.mirror.clear();
-        loop_mirror::delete(&config::loop_dir_in(&self.dir));
+        self.writer.delete();
     }
 
     /// Drained here rather than in the callbacks, since stdio isn't

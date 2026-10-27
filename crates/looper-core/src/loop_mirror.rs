@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use ringbuf::HeapCons;
 use ringbuf::traits::Consumer;
@@ -63,10 +64,15 @@ pub struct LoopMirror {
     /// still being recorded.
     pending: Vec<f32>,
     previous_state: LoopState,
-    finished: Vec<Take>,
+    /// Shared rather than owned, so a save can hand them to the writer
+    /// thread without copying - a finished take never changes.
+    finished: Vec<Arc<Take>>,
     /// Takes removed since the last one was recorded, newest last - what
     /// redo can bring back. Mirrors the layer stack's own count of them.
-    removed: Vec<Take>,
+    removed: Vec<Arc<Take>>,
+    /// How many of `finished`, from the bottom, are already on disk as
+    /// they are here - or on their way there. A save writes the rest.
+    saved: usize,
     /// As the audio thread settled it, from the first take's end.
     loop_len: usize,
     sample_rate: u32,
@@ -80,15 +86,18 @@ pub struct LoopMirror {
 impl LoopMirror {
     pub fn new(capture: Capture, sample_rate: u32, restored: Vec<Vec<f32>>) -> Self {
         let loop_len = restored.first().map(Vec::len).unwrap_or(0);
+        // Read from disk, so on it already.
+        let saved = restored.len();
         Self {
             capture,
             pending: Vec::new(),
             previous_state: LoopState::Idle,
             finished: restored
                 .into_iter()
-                .map(|samples| Take { start: 0, samples })
+                .map(|samples| Arc::new(Take { start: 0, samples }))
                 .collect(),
             removed: Vec::new(),
+            saved,
             loop_len,
             sample_rate,
             lost_samples: false,
@@ -150,12 +159,13 @@ impl LoopMirror {
                 // A first take replaces everything.
                 self.finished.clear();
                 self.removed.clear();
+                self.saved = 0;
                 self.loop_len = loop_len;
                 if loop_len > 0 {
-                    self.finished.push(Take {
+                    self.finished.push(Arc::new(Take {
                         start: 0,
                         samples: take,
-                    });
+                    }));
                 }
                 // Even with nothing in it: the old loop is gone, and left
                 // on disk it would come back at the next launch.
@@ -166,10 +176,10 @@ impl LoopMirror {
                 if take.is_empty() || self.loop_len == 0 {
                     return false;
                 }
-                self.finished.push(Take {
+                self.finished.push(Arc::new(Take {
                     start,
                     samples: take,
-                });
+                }));
                 true
             }
             TakeEnd::Dropped { samples, first } => {
@@ -182,6 +192,7 @@ impl LoopMirror {
             TakeEnd::Cleared => {
                 self.finished.clear();
                 self.removed.clear();
+                self.saved = 0;
                 self.loop_len = 0;
                 true
             }
@@ -197,6 +208,7 @@ impl LoopMirror {
     pub fn remove_last_layer(&mut self) {
         if let Some(take) = self.finished.pop() {
             self.removed.push(take);
+            self.saved = self.saved.min(self.finished.len());
         }
     }
 
@@ -216,78 +228,94 @@ impl LoopMirror {
     pub fn clear(&mut self) {
         self.finished.clear();
         self.removed.clear();
+        self.saved = 0;
         self.loop_len = 0;
         self.lost_samples = false;
     }
 
-    /// Writes every layer into `directory` as a WAV, replacing whatever
-    /// was there.
-    pub fn save(&self, directory: &Path) -> Result<(), String> {
+    /// What the files on disk lack, to match the loop held here - every
+    /// layer above the ones already saved - and from now on taken as
+    /// saved. An error, and nothing taken, if samples went missing.
+    pub fn changes(&mut self) -> Result<Save, String> {
         if self.lost_samples {
             return Err("captured samples were lost; leaving the saved loop alone".to_string());
         }
+        let save = Save {
+            from: self.saved,
+            takes: self.finished[self.saved..].to_vec(),
+            loop_len: self.loop_len,
+            sample_rate: self.sample_rate,
+        };
+        self.saved = self.finished.len();
+        Ok(save)
+    }
 
+    /// The same, written here and now rather than on the writer thread.
+    pub fn save(&mut self, directory: &Path) -> Result<(), String> {
+        self.changes()?.write(directory)
+    }
+}
+
+/// The layers a save writes, from `from` up, with everything it needs to
+/// lay them out - so it can be written on a thread of its own.
+///
+/// Only what changed: an overdub writes its own layer, not the stack
+/// under it, and an undo writes nothing at all. A write that fails is
+/// reported, not retried; the layers under it still load.
+pub struct Save {
+    from: usize,
+    takes: Vec<Arc<Take>>,
+    loop_len: usize,
+    sample_rate: u32,
+}
+
+impl Save {
+    /// Writes the layers, then deletes any file past them: a shorter
+    /// loop, or one undone, must not leave layers behind to be loaded
+    /// back alongside it. The tempo stays - it's saved on its own.
+    pub fn write(&self, directory: &Path) -> Result<(), String> {
         std::fs::create_dir_all(directory)
             .map_err(|e| format!("creating {}: {e}", directory.display()))?;
-        // Clear first: a shorter loop must not leave layers of a longer
-        // one behind to be loaded back alongside it. The tempo stays -
-        // it's saved on its own, when it's known.
-        delete_layers(directory);
-
-        for (index, samples) in self.layers().iter().enumerate() {
-            wav::write(&layer_path(directory, index), samples, self.sample_rate)?;
+        for (offset, take) in self.takes.iter().enumerate() {
+            let index = self.from + offset;
+            let layer = lay_out(take, index, self.loop_len);
+            wav::write(&layer_path(directory, index), &layer, self.sample_rate)?;
         }
+        delete_layers_from(directory, self.from + self.takes.len());
         Ok(())
     }
+}
 
-    /// Every take laid out as a layer, in order.
-    fn layers(&self) -> Vec<Vec<f32>> {
-        self.finished
-            .iter()
-            .enumerate()
-            .map(|(index, take)| {
-                if index == 0 {
-                    self.first_layer(take)
-                } else {
-                    self.layer(take)
-                }
-            })
-            .collect()
-    }
-
-    /// The first take, which set the loop length rather than wrapping
-    /// around one: anything past the length was cut, not summed back
-    /// over the top - a take rounded down to the bar is the case that
-    /// has any. Short of the length, the rest is silence.
-    fn first_layer(&self, take: &Take) -> Vec<f32> {
-        let mut layer = vec![0.0f32; self.loop_len];
-        let n = take.samples.len().min(self.loop_len);
+/// A take laid out over the whole loop as layer `index`, which is how
+/// it's stored and how the audio thread holds it.
+///
+/// The first take set the loop length rather than wrapping around one:
+/// anything past the length was cut, not summed back over the top - a
+/// take rounded down to the bar is the case that has any. Short of the
+/// length, the rest is silence.
+///
+/// Any other take wraps. The first pass over a position replaces what's
+/// there and later passes sum into it - the same rule the layer stack
+/// applies while overdubbing, so a loop plays back the way it sounded.
+fn lay_out(take: &Take, index: usize, loop_len: usize) -> Vec<f32> {
+    let mut layer = vec![0.0f32; loop_len];
+    if index == 0 {
+        let n = take.samples.len().min(loop_len);
         layer[..n].copy_from_slice(&take.samples[..n]);
-        layer
+        return layer;
     }
-
-    /// A take laid out over the whole loop, which is how it's stored and
-    /// how the audio thread holds it.
-    ///
-    /// The first pass over a position replaces what's there and later
-    /// passes sum into it - the same rule the layer stack applies while
-    /// overdubbing, so a loop plays back the way it sounded.
-    fn layer(&self, take: &Take) -> Vec<f32> {
-        let mut layer = vec![0.0f32; self.loop_len];
-        if self.loop_len == 0 {
-            return layer;
-        }
-
-        for (i, &sample) in take.samples.iter().enumerate() {
-            let at = (take.start + i) % self.loop_len;
-            layer[at] = if i < self.loop_len {
-                sample
-            } else {
-                layer[at] + sample
-            };
-        }
-        layer
+    if loop_len == 0 {
+        return layer;
     }
+    for (i, &sample) in take.samples.iter().enumerate() {
+        let at = (take.start + i) % loop_len;
+        layer[at] = if i < loop_len {
+            sample
+        } else {
+            layer[at] + sample
+        };
+    }
+    layer
 }
 
 /// The layers of a saved loop, in order, or nothing if there isn't one or
@@ -331,12 +359,12 @@ pub fn load(directory: &Path, settings: &AppConfig) -> Vec<Vec<f32>> {
 
 /// The whole saved loop, tempo included.
 pub fn delete(directory: &Path) {
-    delete_layers(directory);
+    delete_layers_from(directory, 0);
     let _ = std::fs::remove_file(directory.join(TEMPO_FILE));
 }
 
-fn delete_layers(directory: &Path) {
-    for index in 0..MAX_SAVED_LAYERS {
+fn delete_layers_from(directory: &Path, first: usize) {
+    for index in first..MAX_SAVED_LAYERS {
         let _ = std::fs::remove_file(layer_path(directory, index));
     }
 }

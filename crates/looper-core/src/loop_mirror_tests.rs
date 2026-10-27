@@ -90,6 +90,18 @@ fn s(values: &[i32]) -> Vec<f32> {
     values.iter().map(|&v| v as f32 / 64.0).collect()
 }
 
+impl LoopMirror {
+    /// Every take laid out as a layer, in order - what a save from
+    /// nothing writes.
+    fn layers(&self) -> Vec<Vec<f32>> {
+        self.finished
+            .iter()
+            .enumerate()
+            .map(|(index, take)| lay_out(take, index, self.loop_len))
+            .collect()
+    }
+}
+
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -300,6 +312,103 @@ fn takes_split_where_the_audio_thread_says() {
     mirror.tick(LoopState::Looping);
 
     assert_eq!(mirror.layers(), vec![s(&[1, 2, 3]), s(&[7, 8, 0])]);
+}
+
+#[test]
+fn an_overdub_saves_only_its_own_layer() {
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    mirror.changes().expect("saves");
+
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
+    let save = mirror.changes().expect("saves");
+
+    assert_eq!(
+        (save.from, save.takes.len()),
+        (1, 1),
+        "the stack under it is on disk"
+    );
+}
+
+#[test]
+fn an_undo_writes_nothing_and_deletes_its_file() {
+    let directory = temp_dir("undo-save");
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
+    mirror.save(&directory).expect("saves");
+
+    mirror.remove_last_layer();
+    let save = mirror.changes().expect("saves");
+    assert!(save.takes.is_empty());
+    save.write(&directory).expect("writes");
+
+    assert_eq!(load(&directory, &settings(RATE)), vec![s(&[1, 2])]);
+    let _ = std::fs::remove_dir_all(&directory);
+}
+
+#[test]
+fn a_new_loop_replaces_every_saved_layer() {
+    let directory = temp_dir("new-loop-save");
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
+    mirror.save(&directory).expect("saves");
+
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[5, 6, 7]),
+        3,
+        0,
+    );
+    mirror.save(&directory).expect("saves");
+
+    assert_eq!(load(&directory, &settings(RATE)), vec![s(&[5, 6, 7])]);
+    let _ = std::fs::remove_dir_all(&directory);
 }
 
 #[test]

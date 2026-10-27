@@ -496,6 +496,7 @@ fn redo_brings_a_removed_layer_back_and_saves_it() {
 
     assert_eq!(looper.layer_count(), 2, "back on the audio thread");
     assert!(!looper.can_redo_layer());
+    looper.writer.flush();
     assert!(
         config::loop_dir_in(&dir).join("layer-2.wav").exists(),
         "and on disk"
@@ -724,6 +725,7 @@ fn stopping_late_cuts_the_loop_back_to_the_bar() {
 
     let (secs, _) = looper.loop_duration_and_progress();
     assert_eq!(secs, 6.0, "three bars of 2 s");
+    looper.writer.flush();
     let (saved, _) =
         crate::wav::read(&config::loop_dir_in(&dir).join("layer-1.wav")).expect("saved");
     assert_eq!(saved.len(), 3 * BAR, "and saved that way, not wrapped");
@@ -1105,12 +1107,14 @@ fn a_saved_tempo_the_click_cannot_play_is_guessed_instead() {
 #[test]
 fn clearing_deletes_the_saved_tempo() {
     let (mut looper, _driver, dir, at) = free_take("looper-tempo-saved-clear", 88_200);
+    looper.writer.flush();
     assert!(
         loop_mirror::load_beats(&config::loop_dir_in(&dir)).is_some(),
         "saved"
     );
 
     hold_stop(&mut looper, at);
+    looper.writer.flush();
 
     assert_eq!(loop_mirror::load_beats(&config::loop_dir_in(&dir)), None);
     let _ = std::fs::remove_dir_all(&dir);
@@ -1262,6 +1266,7 @@ fn rec_dub_dubs_layer_after_layer_without_playing_between() {
         "S steps down to playing"
     );
     assert_eq!(looper.layer_count(), 4, "every press a layer of its own");
+    looper.writer.flush();
     assert!(
         config::loop_dir_in(&dir).join("layer-4.wav").exists(),
         "and saved split where the audio thread split it"
@@ -1304,6 +1309,7 @@ fn a_layer_per_pass_stacks_layers_with_no_press() {
 
     assert_eq!(looper.state(), LoopState::Looping, "a press plays");
     assert_eq!(looper.layer_count(), 4);
+    looper.writer.flush();
     assert!(
         config::loop_dir_in(&dir).join("layer-4.wav").exists(),
         "saved split where the audio thread split it"
@@ -1346,6 +1352,7 @@ fn a_dub_after_the_take_is_saved_as_a_layer_of_its_own() {
     looper.stop();
     feed(&mut looper, &driver, 512, at);
 
+    looper.writer.flush();
     let loop_dir = config::loop_dir_in(&dir);
     assert!(loop_dir.join("layer-1.wav").exists());
     assert!(loop_dir.join("layer-2.wav").exists());
@@ -1432,6 +1439,7 @@ fn a_double_press_while_playing_stops_without_a_sliver_of_a_layer() {
 
     assert_eq!(looper.state(), LoopState::Stopped);
     assert_eq!(looper.layer_count(), 1);
+    looper.writer.flush();
     assert!(!config::loop_dir_in(&dir).join("layer-2.wav").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1464,6 +1472,7 @@ fn in_rec_dub_a_double_press_plays_and_keeps_the_layer_before() {
 
     assert_eq!(looper.state(), LoopState::Looping);
     assert_eq!(looper.layer_count(), 2);
+    looper.writer.flush();
     assert!(!config::loop_dir_in(&dir).join("layer-3.wav").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1537,6 +1546,7 @@ fn holding_space_while_playing_undoes_the_last_layer() {
         looper.can_redo_layer(),
         "the layer, not the dub, waits for redo"
     );
+    looper.writer.flush();
     assert!(!config::loop_dir_in(&dir).join("layer-3.wav").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
