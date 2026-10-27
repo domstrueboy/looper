@@ -339,7 +339,7 @@ How the main control behaves, as settings rather than one fixed way.
   a hold first takes back what its press did - a dub it opened is
   abandoned, as the double press did - then undoes. Holding while
   dubbing counts the dub in progress as the layer undone, and plays.
-- **7h. A layer per pass - next.** The third record mode: while dubbing, each
+- **7h. A layer per pass - done.** The third record mode: while dubbing, each
   pass closes the layer one loop length after it opened - not at the
   top, so a phrase crossing it stays whole - and opens the next, on
   the audio thread, reported as a take end. With every layer used, the

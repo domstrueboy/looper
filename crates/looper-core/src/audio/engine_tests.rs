@@ -522,3 +522,94 @@ fn a_clear_reports_the_open_take_dropped_then_cleared() {
         ]
     );
 }
+
+// --- A layer per pass -------------------------------------------------------
+
+/// A per-pass path dubbing, the dub opened two samples off the block
+/// grid so its pass ends mid-block.
+fn dubbing_per_pass(max_layers: u32) -> (Arc<SharedControl>, AudioPath, Capture, f32) {
+    let settings = AppConfig {
+        record_mode: RecordMode::RecDubPerPass,
+        max_layers,
+        ..test_settings()
+    };
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next)[..2]);
+    control.publish_state(LoopState::Overdubbing);
+    (control, path, captured, next)
+}
+
+#[test]
+fn a_layer_per_pass_splits_on_the_sample_the_pass_ends() {
+    let (control, mut path, mut captured, mut next) = dubbing_per_pass(4);
+
+    // One and a half passes, in whole blocks.
+    for _ in 0..CYCLES_PER_LOOP * 3 / 2 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    let ends = ends(&mut captured);
+    assert_eq!(
+        ends[ends.len() - 2..],
+        [
+            TakeEnd::Overdub {
+                samples: LOOP_LEN,
+                start: 2,
+            },
+            TakeEnd::Overdub {
+                samples: LOOP_LEN / 2,
+                start: 2,
+            },
+        ],
+        "a whole pass, then the half after it, from the same place"
+    );
+    assert_eq!(path.output.stack.layer_count(), 3);
+}
+
+#[test]
+fn with_every_layer_used_the_last_keeps_taking_passes() {
+    let (control, mut path, mut captured, mut next) = dubbing_per_pass(2);
+
+    for _ in 0..CYCLES_PER_LOOP * 2 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    let ends = ends(&mut captured);
+    assert_eq!(
+        ends.last(),
+        Some(&TakeEnd::Overdub {
+            samples: 2 * LOOP_LEN,
+            start: 2,
+        }),
+        "one layer, two passes summed into it"
+    );
+    assert_eq!(path.output.stack.layer_count(), 2);
+}
+
+#[test]
+fn without_a_layer_per_pass_a_dub_runs_on_into_the_next_pass() {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+    dubbing(&control, &mut path, &mut next);
+
+    for _ in 0..CYCLES_PER_LOOP * 2 {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    assert_eq!(path.output.stack.layer_count(), 2, "one layer, however many passes");
+}

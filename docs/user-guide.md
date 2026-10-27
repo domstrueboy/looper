@@ -103,7 +103,7 @@ The colored dot shows what's happening:
 
 Once a loop is playing, press Space to layer on top of it. Whatever you
 play is added to the loop. **Max layers** in Settings sets how many you
-can stack including the first recording - four by default - and the
+can stack including the first recording - eight by default - and the
 counter under the buttons shows where you are. With every layer used, a
 press does nothing.
 
@@ -111,16 +111,24 @@ press does nothing.
 
 **Record mode** in Settings picks what Space does after the first take:
 
-| | REC > PLAY (default) | REC > DUB |
-|---|---|---|
-| Press ending the take | the loop plays | straight into a dub, for the second part |
-| Press while dubbing | keeps the layer, plays | keeps the layer, dubs the next one |
-| Press while playing | dubs a new layer | dubs a new layer |
-| **S** while dubbing | stops | keeps the layer, plays - press again to stop |
+| | REC > PLAY (default) | REC > DUB | REC > DUB, a layer per pass |
+|---|---|---|---|
+| Press ending the take | the loop plays | straight into a dub | straight into a dub |
+| Press while dubbing | keeps the layer, plays | keeps the layer, dubs the next one | keeps the layer, plays |
+| Press while playing | dubs a new layer | dubs a new layer | dubs - a layer per pass again |
+| **S** while dubbing | stops | keeps the layer, plays - press again to stop | stops |
 
 REC > DUB is for building up part after part without a silent pass
 between: press at the top of each pass and the next part goes on a layer
 of its own. When the last layer is reached, the press plays instead.
+
+**A layer per pass** does the same with no presses: keep playing, and
+every time round the loop becomes a layer of its own, so undo takes back
+just the last pass. A layer ends one loop length after it began - not at
+the top of the loop - so a phrase you play across the top stays in one
+piece. When the last layer is reached, dubbing carries on into it rather
+than stopping. A pass you sit out still uses a layer; hold Space to undo
+it.
 
 ### Good to know
 

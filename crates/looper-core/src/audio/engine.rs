@@ -16,7 +16,7 @@ use ringbuf::{
 use super::loop_stack::{LoopStack, OpenTake};
 use super::metronome::Metronome;
 use super::shared_control::SharedControl;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, RecordMode};
 use crate::loop_mirror::{Capture, TakeEnd};
 use crate::state_machine::LoopState;
 
@@ -155,6 +155,10 @@ pub struct OutputPath {
     /// Samples passed on since the last take ended.
     take_samples: usize,
     stack: LoopStack,
+    /// REC→DUB with a layer per pass: a dub closes itself once it has
+    /// covered the loop, and the next opens on the following sample.
+    /// Fixed for the stream's life - a settings change rebuilds it.
+    layer_per_pass: bool,
     metronome: Metronome,
     /// The callback only ever sees the published state, never the
     /// transitions, so layer bookkeeping keys off this changing - see
@@ -187,13 +191,13 @@ impl OutputPath {
             // its first half opened - can't land on the layer before.
             if self.control.take_next_layer_request()
                 && self.previous_state == LoopState::Overdubbing
-                && let Some(ended) = self.stack.open_take()
             {
-                self.stack.finish_overdub();
-                let samples = std::mem::take(&mut self.take_samples);
-                let end = take_end(&self.stack, ended, samples, false);
-                push_end(&mut self.ends, &self.control, end);
-                self.stack.begin_overdub();
+                next_layer(
+                    &mut self.stack,
+                    &mut self.ends,
+                    &self.control,
+                    &mut self.take_samples,
+                );
             }
             if state != self.previous_state {
                 // A count-in may have opened the take already, on the
@@ -281,21 +285,39 @@ impl OutputPath {
                     }
                 }
                 LoopState::Looping | LoopState::Overdubbing => {
-                    let loop_out = &mut self.loop_out[..frames];
                     if state == LoopState::Overdubbing {
-                        let recorded = &mut self.recorded[..frames];
-                        let n = self.recorder.pop_slice(recorded);
+                        let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
                         // A short read means the input fell behind;
                         // record the gap as silence rather than
                         // shifting everything after it out of time.
-                        recorded[n..].fill(0.0);
+                        self.recorded[n..frames].fill(0.0);
                         let gain = self.control.volume_pct();
-                        self.stack.read_mixed_with_overdub(loop_out, recorded, gain);
-                        self.take_samples += pass_on(&mut self.capture, &self.control, recorded);
+                        // In pieces where a pass ends mid-block, so the
+                        // next layer starts on the very next sample.
+                        let mut done = 0;
+                        while done < frames {
+                            let left = self.layer_per_pass.then(|| self.stack.pass_left()).flatten();
+                            if left == Some(0) {
+                                next_layer(
+                                    &mut self.stack,
+                                    &mut self.ends,
+                                    &self.control,
+                                    &mut self.take_samples,
+                                );
+                                continue;
+                            }
+                            let end = left.map_or(frames, |left| frames.min(done + left));
+                            let recorded = &self.recorded[done..end];
+                            self.stack
+                                .read_mixed_with_overdub(&mut self.loop_out[done..end], recorded, gain);
+                            self.take_samples += pass_on(&mut self.capture, &self.control, recorded);
+                            done = end;
+                        }
                     } else {
-                        self.stack.read_mixed(loop_out, self.control.volume_pct());
+                        self.stack
+                            .read_mixed(&mut self.loop_out[..frames], self.control.volume_pct());
                     }
-                    mix_add(dry, loop_out);
+                    mix_add(dry, &self.loop_out[..frames]);
                 }
                 LoopState::Idle | LoopState::Stopped => {}
             }
@@ -343,6 +365,25 @@ fn take_end(stack: &LoopStack, ended: OpenTake, samples: usize, dropped: bool) -
             start: ended.start,
         }
     }
+}
+
+/// Closes the dub in progress and opens the next on the same sample,
+/// reporting the end like any other - for REC→DUB's press, and for a
+/// layer per pass. Free rather than a method, so it can run while the
+/// callback holds its scratch buffers.
+fn next_layer(
+    stack: &mut LoopStack,
+    ends: &mut HeapProd<TakeEnd>,
+    control: &SharedControl,
+    take_samples: &mut usize,
+) {
+    let Some(ended) = stack.open_take() else {
+        return;
+    };
+    stack.finish_overdub();
+    let end = take_end(stack, ended, std::mem::take(take_samples), false);
+    push_end(ends, control, end);
+    stack.begin_overdub();
 }
 
 /// A full ring is counted as lost capture, like a full sample ring: the
@@ -438,6 +479,7 @@ pub fn build_audio_path(
             ends: ends_tx,
             take_samples: 0,
             stack,
+            layer_per_pass: settings.record_mode == RecordMode::RecDubPerPass,
             metronome: Metronome::new(sample_rate, settings.metronome_bpm),
             previous_state: LoopState::Idle,
         },

@@ -464,3 +464,39 @@ fn bars_stop_at_what_the_loop_can_hold() {
     // 64 frames hold six 10-frame bars, not the seven 64 rounds to.
     assert_eq!(first_take_in_bars(64).recorded_len(), 60);
 }
+
+// --- A layer per pass -------------------------------------------------------
+
+#[test]
+fn a_dub_counts_down_to_the_end_of_its_pass() {
+    let mut stack = with_first_layer(&[1.0, 2.0, 3.0, 4.0]);
+    assert_eq!(stack.pass_left(), None, "nothing open");
+    stack.begin_overdub();
+    assert_eq!(stack.pass_left(), Some(4));
+
+    let mut out = [0.0; 3];
+    stack.read_mixed_with_overdub(&mut out, &[1.0; 3], 100);
+
+    assert_eq!(stack.pass_left(), Some(1));
+}
+
+#[test]
+fn the_last_layer_has_no_pass_end_and_keeps_taking_passes() {
+    let mut stack = with_first_layer(&[1.0, 2.0]);
+    for _ in 2..MAX_LAYERS {
+        stack.begin_overdub();
+        let mut out = [0.0; 2];
+        stack.read_mixed_with_overdub(&mut out, &[1.0, 1.0], 100);
+        stack.finish_overdub();
+    }
+    stack.begin_overdub();
+
+    assert_eq!(stack.pass_left(), None, "no slot after it");
+}
+
+#[test]
+fn a_first_take_has_no_pass_end() {
+    let mut stack = LoopStack::new(16, MAX_LAYERS);
+    stack.begin_first_layer();
+    assert_eq!(stack.pass_left(), None);
+}

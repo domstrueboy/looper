@@ -26,9 +26,11 @@ pub const DEFAULT_LATENCY_MS: u32 = 8;
 pub const MAX_LOOP_SECS_RANGE: RangeInclusive<u32> = 10..=120;
 pub const DEFAULT_MAX_LOOP_SECS: u32 = 60;
 
-/// How many layers can be stacked, the first recording included.
+/// How many layers can be stacked, the first recording included. Eight
+/// by default, since a layer per pass uses them up quickly: each is a
+/// `max_loop_secs` buffer, ~10 MB at 60 s, held twice (stack and copy).
 pub const MAX_LAYERS_RANGE: RangeInclusive<u32> = 1..=8;
-pub const DEFAULT_MAX_LAYERS: u32 = 4;
+pub const DEFAULT_MAX_LAYERS: u32 = 8;
 
 /// How long a control has to be held: the main one to undo a layer, stop
 /// to clear the loop.
@@ -65,6 +67,16 @@ pub enum RecordMode {
     /// playing in between.
     #[serde(alias = "dub")]
     RecDub,
+    /// As REC→DUB after the take, but the layers split themselves: each
+    /// pass round the loop is one, with no press. A press plays.
+    RecDubPerPass,
+}
+
+impl RecordMode {
+    /// Whether ending the take goes straight on into a dub.
+    pub fn dubs_after_take(self) -> bool {
+        self != Self::RecPlay
+    }
 }
 
 const CONFIG_DIR: &str = "looper-pedal";

@@ -190,6 +190,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 ui.label(match looper.record_mode() {
                     RecordMode::RecPlay => "Space or button: record / play / dub",
                     RecordMode::RecDub => "Space or button: record / dub / next dub",
+                    RecordMode::RecDubPerPass => "Space or button: record / dub / play",
                 });
                 ui.label("S or double-tap: stop  |  R: redo");
                 ui.label(format!(

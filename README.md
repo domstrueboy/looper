@@ -291,7 +291,7 @@ stop.
 | From | Press | Stop (`S`) |
 |---|---|---|
 | **Idle** | **Recording** (or **Arming**, below) | - |
-| **Recording** | ends the take: **Looping**, or **Overdubbing** in REC→DUB | ends the take: **Stopped** |
+| **Recording** | ends the take: **Looping**, or **Overdubbing** in both REC→DUBs | ends the take: **Stopped** |
 | **Looping** | **Overdubbing** - nothing with every layer used | **Stopped** |
 | **Overdubbing** | keeps the layer: **Looping**, or the next layer in REC→DUB | keeps the layer: **Stopped**, or **Looping** in REC→DUB |
 | **Stopped** | **Looping** | - |
@@ -310,6 +310,15 @@ opens the next on the same sample, reporting the end like any other.
 It's taken after loading the state and before applying it - a state
 change seen means the request made before it is seen too, so a double
 press's take-back can't land on the layer before the new one.
+
+REC→DUB with **a layer per pass** splits the same way with no request:
+once the dub in progress has covered the loop (`LoopStack::pass_left`
+reaches 0), the callback closes it and opens the next - mid-block if
+that's where the pass ends, by processing the block in pieces. Counted
+from where the dub opened, not the top, so a phrase across the top
+stays whole. With no slot left there's no pass end, and the last layer
+sums passes as any dub does. The mode is read from the settings when
+the audio path is built; changing it rebuilds the looper anyway.
 
 A **long press** fires the moment the hold crosses the threshold while
 still held, not on release. How long that is is the `long_press_ms`
@@ -379,7 +388,7 @@ off the click for good. Three things make it work:
 
 The first recording fixes the loop length; each overdub adds another
 layer on top, and playback is their sum. `max_layers` of them can be
-stacked, four by default, and the newest can be dropped again
+stacked, eight by default, and the newest can be dropped again
 ("Undo"). Never the first take: emptying the loop is a clear's job.
 
 "Redo" brings a dropped layer back. It costs almost nothing: removing
@@ -560,10 +569,10 @@ window opened.
 | `preroll_ms` | 4000 | 0-5000 | wait before recording starts; 0 = off |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold is: Space to undo, S to clear |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
-| `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"` | REC→PLAY or REC→DUB - see "State machine"; the older `after_take = "play"/"dub"` still reads |
+| `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"`, `"rec_dub_per_pass"` | see "State machine"; the older `after_take = "play"/"dub"` still reads |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |
 | `max_loop_secs` | 60 | 10-120 | longest recordable loop |
-| `max_layers` | 4 | 1-8 | layers including the first recording |
+| `max_layers` | 8 | 1-8 | layers including the first recording |
 
 The last two are a memory multiplier - every layer is pre-allocated at
 the full loop length, so it costs `seconds x layers x sample rate x 4`

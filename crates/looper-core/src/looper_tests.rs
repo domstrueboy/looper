@@ -913,6 +913,13 @@ fn rec_dub(max_layers: u32) -> AppConfig {
     }
 }
 
+fn rec_dub_per_pass(max_layers: u32) -> AppConfig {
+    AppConfig {
+        record_mode: config::RecordMode::RecDubPerPass,
+        ..rec_play(max_layers)
+    }
+}
+
 /// Two presses close enough together to make a double, with a block of
 /// audio between them: whatever the first half opened is recording by
 /// the time the second arrives.
@@ -1027,6 +1034,41 @@ fn rec_dub_with_no_layer_left_after_this_one_plays() {
 
     assert_eq!(looper.state(), LoopState::Looping);
     assert_eq!(looper.layer_count(), 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_layer_per_pass_stacks_layers_with_no_press() {
+    // The take is 8,000 frames; two and a half passes of dub after it.
+    let (mut looper, driver, dir) = start("looper-per-pass", &rec_dub_per_pass(8));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+    assert_eq!(looper.state(), LoopState::Overdubbing, "straight into the second part");
+
+    feed(&mut looper, &driver, 20_000, at);
+    assert_eq!(looper.layer_count(), 3, "two passes done, a third going");
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Looping, "a press plays");
+    assert_eq!(looper.layer_count(), 4);
+    assert!(
+        config::loop_dir_in(&dir).join("layer-4.wav").exists(),
+        "saved split where the audio thread split it"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_layer_per_pass_stops_in_one_press() {
+    let (mut looper, driver, dir) = start("looper-per-pass-stop", &rec_dub_per_pass(8));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+
+    looper.stop();
+
+    assert_eq!(looper.state(), LoopState::Stopped, "no step down, unlike REC>DUB");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

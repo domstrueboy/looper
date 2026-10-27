@@ -227,6 +227,15 @@ impl LoopStack {
         true
     }
 
+    /// Samples until the dub in progress has covered the whole loop once,
+    /// which is where a layer per pass closes it. `None` with no dub
+    /// open, or no slot to open the next in: the last layer keeps taking
+    /// passes, summing as any dub does past its first.
+    pub fn pass_left(&self) -> Option<usize> {
+        let index = self.recording.filter(|&index| index > 0)?;
+        (index + 1 < self.layers.len()).then(|| self.loop_len - self.layers[index].written)
+    }
+
     /// Keeps the take just recorded. One with nothing in it is dropped
     /// rather than adding a silent layer.
     pub fn finish_overdub(&mut self) {

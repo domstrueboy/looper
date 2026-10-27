@@ -80,6 +80,20 @@ fn an_after_take_saved_before_reads_as_its_record_mode() {
 }
 
 #[test]
+fn a_layer_per_pass_reads_back() {
+    let config = AppConfig {
+        record_mode: RecordMode::RecDubPerPass,
+        ..saved()
+    };
+    let text = config.to_toml().expect("serializes");
+    assert!(text.contains("record_mode = \"rec_dub_per_pass\""), "got: {text}");
+    assert_eq!(
+        AppConfig::from_toml(&text).expect("parses").record_mode,
+        RecordMode::RecDubPerPass
+    );
+}
+
+#[test]
 fn the_record_mode_is_written_under_its_own_name() {
     let text = saved().to_toml().expect("serializes");
     assert!(text.contains("record_mode = \"rec_dub\""), "got: {text}");

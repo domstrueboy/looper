@@ -207,12 +207,16 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     );
     // ">" rather than an arrow: egui's bundled proportional font has no
     // arrow glyph, and it would show as an empty box.
-    ui.horizontal(|ui| {
-        ui.label("Record mode");
-        ui.radio_value(&mut settings.config.record_mode, RecordMode::RecPlay, "REC > PLAY")
+    // One under another: three side by side don't fit the window.
+    ui.label("Record mode");
+    ui.indent("record_mode", |ui| {
+        let mode = &mut settings.config.record_mode;
+        ui.radio_value(mode, RecordMode::RecPlay, "REC > PLAY")
             .on_hover_text("The take plays; Space then dubs and plays in turn");
-        ui.radio_value(&mut settings.config.record_mode, RecordMode::RecDub, "REC > DUB")
+        ui.radio_value(mode, RecordMode::RecDub, "REC > DUB")
             .on_hover_text("The take goes straight into a dub; Space then dubs the next layer");
+        ui.radio_value(mode, RecordMode::RecDubPerPass, "REC > DUB, a layer per pass")
+            .on_hover_text("The take goes straight into a dub; every pass is a layer of its own");
     });
 
     ui.add_space(8.0);

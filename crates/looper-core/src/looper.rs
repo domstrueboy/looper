@@ -797,7 +797,7 @@ impl LooperState {
     /// Whether ending the take goes straight on into a dub. Not with one
     /// layer allowed: there'd be nothing to dub into.
     fn dubs_after_take(&self) -> bool {
-        self.config.record_mode == RecordMode::RecDub && self.max_layers > 1
+        self.config.record_mode.dubs_after_take() && self.max_layers > 1
     }
 
     /// Whether a press now keeps the dub in progress and dubs the next
