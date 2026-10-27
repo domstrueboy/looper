@@ -219,11 +219,11 @@ fn remove_last_layer_drops_only_the_newest() {
 }
 
 #[test]
-fn removing_the_only_layer_empties_the_loop() {
+fn the_first_layer_is_never_removed() {
     let mut stack = with_first_layer(&[1.0, 2.0]);
     stack.remove_last_layer();
-    assert!(stack.is_empty());
-    assert_eq!(stack.recorded_len(), 0);
+    assert_eq!(stack.layer_count(), 1, "that's a clear");
+    assert!(!stack.redo_layer(), "nothing was removed");
 }
 
 #[test]
@@ -391,22 +391,8 @@ fn nothing_removed_means_nothing_to_redo() {
 }
 
 #[test]
-fn removing_the_only_layer_can_be_redone_with_its_length() {
-    let mut stack = with_first_layer(&[1.0, 2.0, 3.0]);
-    stack.remove_last_layer();
-    assert!(stack.is_empty(), "nothing to play meanwhile");
-
-    assert!(stack.redo_layer());
-
-    assert_eq!(stack.recorded_len(), 3);
-    let mut out = [0.0; 4];
-    stack.read_mixed(&mut out, 100);
-    assert_eq!(out, [1.0, 2.0, 3.0, 1.0], "from the top");
-}
-
-#[test]
-fn a_new_first_take_forgets_a_removed_loop() {
-    let mut stack = with_first_layer(&[1.0, 2.0]);
+fn a_new_first_take_forgets_a_removed_layer() {
+    let mut stack = with_two_layers();
     stack.remove_last_layer();
     stack.begin_first_layer();
     stack.finish_first_layer();

@@ -1385,7 +1385,6 @@ fn stop_ends_a_dub_and_keeps_it() {
 
     assert_eq!(looper.state(), LoopState::Stopped);
     assert_eq!(looper.layer_count(), 2, "the dub kept");
-    assert!(!looper.can_stop(), "nothing left to stop");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

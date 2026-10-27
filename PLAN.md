@@ -203,12 +203,11 @@ in the order they're fixed:
   count there. A tempo that isn't finite and positive is ignored rather
   than reaching `Scheduler::new`'s assert, and an output with no
   channels is refused at start rather than panicking the callback.
-- **9e. Dead code.** `LoopStack`'s "remove the only layer" stash
-  (`removed_len`, the `count == 0` branches of remove and redo) - undo
-  never takes the first layer; `can_stop` (tests only); the comment on
-  `active_loop_tempo` about a removed loop redo could bring back;
-  `Pattern::METRONOME` and `Voice::is_playing` (tests only).
-  `Pattern::new` stays - the drums need it.
+- **9e. Dead code - done.** `LoopStack` no longer removes its first
+  layer, so the stash that brought an emptied loop back went; so did
+  `active_loop_tempo`'s layer-count filter (the tempo is already gone
+  whenever the loop is), `can_stop`, `Pattern::METRONOME` and
+  `Voice::is_playing`. `Pattern::new` stays - the drums need it.
 - **9f. Thread contract.** One table in `shared_control.rs`: every
   request and level, who sets it, when the callback reads it and in
   what order (next layer, then state change with abandon, then clear,

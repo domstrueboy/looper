@@ -12,9 +12,6 @@ pub struct Pattern {
 }
 
 impl Pattern {
-    /// 4/4, a click on every beat.
-    pub const METRONOME: Self = Self::metronome(4);
-
     /// A click on every beat of a `beats`-beat bar. Which one is
     /// accented is the player's business: the step says.
     pub const fn metronome(beats: u32) -> Self {
@@ -162,10 +159,6 @@ impl Voice {
             *o += s * gain;
         }
         self.pos = (pos + n < sound.len()).then_some(pos + n);
-    }
-
-    pub fn is_playing(&self) -> bool {
-        self.pos.is_some()
     }
 }
 

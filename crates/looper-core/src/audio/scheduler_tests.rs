@@ -4,13 +4,16 @@ use super::*;
 /// hand.
 const RATE: u32 = 4;
 
+/// 4/4, a click on every beat.
+const FOUR_FOUR: Pattern = Pattern::metronome(4);
+
 fn offsets(scheduler: &Scheduler, start: u64, frames: usize) -> Vec<usize> {
     scheduler.events(start, frames).map(|e| e.offset).collect()
 }
 
 #[test]
 fn the_metronome_sounds_on_every_beat() {
-    let scheduler = Scheduler::new(RATE, 60.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(RATE, 60.0, FOUR_FOUR);
     let events: Vec<Event> = scheduler.events(0, 16).collect();
     assert_eq!(
         events,
@@ -28,28 +31,28 @@ fn the_metronome_sounds_on_every_beat() {
 
 #[test]
 fn steps_count_on_into_the_next_bar() {
-    let scheduler = Scheduler::new(RATE, 60.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(RATE, 60.0, FOUR_FOUR);
     let steps: Vec<u32> = scheduler.events(16, 8).map(|e| e.step).collect();
     assert_eq!(steps, vec![0, 1], "bar two starts over at step 0");
 }
 
 #[test]
 fn offsets_are_from_the_start_of_the_block() {
-    let scheduler = Scheduler::new(RATE, 60.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(RATE, 60.0, FOUR_FOUR);
     assert_eq!(offsets(&scheduler, 3, 4), vec![1], "the beat at 4");
 }
 
 #[test]
 fn a_beat_on_the_block_edge_lands_in_exactly_one_block() {
     // Heard twice or not at all, otherwise.
-    let scheduler = Scheduler::new(RATE, 60.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(RATE, 60.0, FOUR_FOUR);
     assert_eq!(offsets(&scheduler, 0, 4), vec![0]);
     assert_eq!(offsets(&scheduler, 4, 4), vec![0]);
 }
 
 #[test]
 fn a_block_between_beats_has_none() {
-    let scheduler = Scheduler::new(RATE, 60.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(RATE, 60.0, FOUR_FOUR);
     assert!(offsets(&scheduler, 1, 3).is_empty());
 }
 
@@ -57,7 +60,7 @@ fn a_block_between_beats_has_none() {
 fn a_fractional_tempo_does_not_drift() {
     // 92 BPM at 44.1 kHz is 28,760.87 frames a beat. Rounded once, the
     // grid would be 13 frames off after a hundred beats, and growing.
-    let scheduler = Scheduler::new(44_100, 92.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(44_100, 92.0, FOUR_FOUR);
     let exact = 100.0 * 44_100.0 * 60.0 / 92.0;
     let start = exact as u64 - 10;
     let found = offsets(&scheduler, start, 20);
@@ -72,7 +75,7 @@ fn a_fractional_tempo_does_not_drift() {
 #[test]
 fn small_blocks_see_every_beat_that_one_big_block_does() {
     // The callback hands over whatever block size the driver uses.
-    let scheduler = Scheduler::new(44_100, 137.0, Pattern::METRONOME);
+    let scheduler = Scheduler::new(44_100, 137.0, FOUR_FOUR);
     let whole: Vec<u64> = scheduler
         .events(0, 200_000)
         .map(|e| e.offset as u64)
@@ -110,7 +113,10 @@ fn a_voice_plays_its_sound_across_blocks_and_stops() {
     let mut second = [0.0; 3];
     voice.add_into(&sound, &mut second, 1.0);
     assert_eq!(second, [3.0, 0.0, 0.0]);
-    assert!(!voice.is_playing());
+
+    let mut third = [0.0; 1];
+    voice.add_into(&sound, &mut third, 1.0);
+    assert_eq!(third, [0.0], "and stops there");
 }
 
 #[test]

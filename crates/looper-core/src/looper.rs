@@ -273,12 +273,6 @@ impl LooperState {
         }
     }
 
-    /// Whether the stop control would do anything: something has to be
-    /// playing, recording or counting in.
-    pub fn can_stop(&self) -> bool {
-        !matches!(self.state(), LoopState::Idle | LoopState::Stopped)
-    }
-
     /// The stop control - the second pedal, and what a double press does
     /// on the first. A take or a dub ends and is kept, a count-in is
     /// called off. In REC→DUB, where the main control never leaves
@@ -342,7 +336,7 @@ impl LooperState {
     /// The tempo the click is playing at: the loop's while there is one,
     /// otherwise the configured one.
     pub fn tempo(&self) -> f64 {
-        match self.active_loop_tempo() {
+        match self.loop_tempo {
             Some(tempo) => tempo.bpm(),
             None => f64::from(self.config.metronome_bpm),
         }
@@ -351,23 +345,17 @@ impl LooperState {
     /// Whether the tempo is the loop's - which is fixed by its length,
     /// so it can only be halved or doubled, not nudged.
     pub fn tempo_is_the_loops(&self) -> bool {
-        self.active_loop_tempo().is_some()
-    }
-
-    /// A removed loop that redo could bring back keeps its tempo, but
-    /// with nothing playing the click is the configured one again.
-    fn active_loop_tempo(&self) -> Option<LoopTempo> {
-        self.loop_tempo.filter(|_| self.layer_count() > 0)
+        self.loop_tempo.is_some()
     }
 
     pub fn can_halve_tempo(&self) -> bool {
-        self.active_loop_tempo()
+        self.loop_tempo
             .and_then(|tempo| tempo.halved(bpm_range()))
             .is_some()
     }
 
     pub fn can_double_tempo(&self) -> bool {
-        self.active_loop_tempo()
+        self.loop_tempo
             .and_then(|tempo| tempo.doubled(bpm_range()))
             .is_some()
     }
@@ -375,7 +363,7 @@ impl LooperState {
     /// For a guess that came out twice too fast: same loop, half the
     /// beats.
     pub fn halve_tempo(&mut self) {
-        if let Some(halved) = self.active_loop_tempo().and_then(|t| t.halved(bpm_range())) {
+        if let Some(halved) = self.loop_tempo.and_then(|t| t.halved(bpm_range())) {
             self.loop_tempo = Some(halved);
             self.control.publish_metronome_bpm(self.tempo());
             self.save_tempo();
@@ -383,10 +371,7 @@ impl LooperState {
     }
 
     pub fn double_tempo(&mut self) {
-        if let Some(doubled) = self
-            .active_loop_tempo()
-            .and_then(|t| t.doubled(bpm_range()))
-        {
+        if let Some(doubled) = self.loop_tempo.and_then(|t| t.doubled(bpm_range())) {
             self.loop_tempo = Some(doubled);
             self.control.publish_metronome_bpm(self.tempo());
             self.save_tempo();
@@ -714,8 +699,8 @@ impl LooperState {
             });
             self.save_tempo();
         }
-        // Every frame rather than at each change: which tempo applies
-        // turns on the layer count, which the audio thread moves.
+        // Every frame as well as at each change: cheap, and a path that
+        // changes the tempo can't forget to.
         self.control.publish_metronome_bpm(self.tempo());
 
         if self.control.take_capture_lost() > 0 {

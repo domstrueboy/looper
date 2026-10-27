@@ -71,9 +71,6 @@ pub struct LoopStack {
     /// what redo can bring back, newest first. A new take writes into the
     /// slot above `count`, so starting one forgets them all.
     removed: usize,
-    /// The loop length while every layer is removed: the stack reads as
-    /// empty then, but redo needs the length back.
-    removed_len: usize,
     /// One bit per layer, set = left out of the mix. Only playback reads
     /// it: a muted layer is still there, recorded and saved, just silent.
     muted: u32,
@@ -92,7 +89,6 @@ impl LoopStack {
             play_pos: 0,
             recording: None,
             removed: 0,
-            removed_len: 0,
             muted: 0,
         }
     }
@@ -290,19 +286,14 @@ impl LoopStack {
 
     /// Drops the newest finished layer, leaving the loop length and
     /// playback position alone so the layers underneath keep playing.
-    /// Its samples stay where they are, for `redo_layer`. Dropping the
-    /// last one empties the stack, but unlike `clear` it can come back.
+    /// Its samples stay where they are, for `redo_layer`. Never the
+    /// first: emptying the loop is a clear's job.
     pub fn remove_last_layer(&mut self) {
-        if self.count == 0 {
+        if self.count <= 1 {
             return;
         }
         self.count -= 1;
         self.removed += 1;
-        if self.count == 0 {
-            self.removed_len = self.loop_len;
-            self.loop_len = 0;
-            self.play_pos = 0;
-        }
     }
 
     /// Brings back the layer most recently removed, exactly as it was.
@@ -310,10 +301,6 @@ impl LoopStack {
     pub fn redo_layer(&mut self) -> bool {
         if self.removed == 0 || self.recording.is_some() {
             return false;
-        }
-        if self.count == 0 {
-            self.loop_len = self.removed_len;
-            self.play_pos = 0;
         }
         self.removed -= 1;
         self.count += 1;
