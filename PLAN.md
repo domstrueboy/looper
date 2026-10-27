@@ -45,12 +45,15 @@ Decisions that steer what gets built and in what order.
 loop / stop cycle, overdub layers, the loop surviving restarts. See
 `v1-archive.md`.
 
-**v2** steps 0-8 are done (`v2-archive.md`): the mini/extended switch,
+**v2** steps 0-9 are done (`v2-archive.md`): the mini/extended switch,
 layer mute, redo, the metronome with live tempo, tap tempo and a time
 signature, loops snapped to bars with a tempo for every loop, the pedal
 feel - two pedals (Space never stops, S always does), three record
 modes, hold to undo, record start and stop modes - and loop and click
-levels on screen. Step 9, the code review, is under way.
+levels on screen - and step 9, a code review of all of it: saving off
+the UI thread, a bounded save copy, the callback's edge cases, both
+screens made leaves, and the press logic pinned in one table. Next is
+step 10, the manual test plan.
 
 Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
@@ -176,65 +179,7 @@ Worth settling before the work they block starts.
 
 Ordered. One step at a time, each a commit (see *Ground rules*).
 
-### 9. Code review - under way
-
-Read with fresh eyes before the drums build on the scheduler, the tempo
-and the press logic. Checked and clean: nothing the callback reaches
-allocates, locks or does I/O, and every loop in it is bounded - the
-per-pass split loop included, since a pass only ends with a slot free
-for the next; `cpal` only in hal, `egui` only in app/ui, the HAL with no
-looping; the suite runs in about a second with no sleeps. The findings,
-in the order they're fixed:
-
-- **9a. Hygiene - done.** `cargo fmt` repo-wide, the clippy `as_chunks`
-  warning, CRLF working copies back to LF, and `rustfmt.toml` with
-  `newline_style = "Unix"` so `cargo fmt` stops preserving CRLF.
-- **9b. Saving off the UI thread - done.** A save wrote every layer
-  inside `tick`, ~90 MB at 8 x 60 s, delaying the presses read in that
-  frame. Now only what changed is written, on `loop_writer.rs`'s thread,
-  which also takes the tempo and the clear's delete so they stay in
-  order.
-- **9c. The copy bounded - done.** `LoopMirror` kept a dub as played,
-  so a long one held every pass. Now a dub folds onto one loop length
-  as it arrives, a first take holds only what the stack kept, and
-  Settings says the copy can take as much memory again.
-- **9d. Real-time edges - done.** A playing state over an empty stack
-  clicked at the top of every block; the metronome now keeps its own
-  count there. A tempo that isn't finite and positive is ignored rather
-  than reaching `Scheduler::new`'s assert, and an output with no
-  channels is refused at start rather than panicking the callback.
-- **9e. Dead code - done.** `LoopStack` no longer removes its first
-  layer, so the stash that brought an emptied loop back went; so did
-  `active_loop_tempo`'s layer-count filter (the tempo is already gone
-  whenever the loop is), `can_stop`, `Pattern::METRONOME` and
-  `Voice::is_playing`. `Pattern::new` stays - the drums need it.
-- **9f. Thread contract - done.** One table on `SharedControl`: every
-  request and level, who sets it, and when and in what order the
-  callback reads it; why `Immediate` stores the same 0 as no stop.
-- **9g. Press logic - done.** One table-driven test, every record mode
-  x state x gesture (press, double, hold, stop, stop-hold) to the state
-  and layers it leaves - 75 rows, checked against the user guide. Then
-  the gestures moved, unchanged, to `looper/pedal.rs`.
-- **9h. The looper screen a leaf - done.** `render` takes
-  `&LooperState` and returns `Action::Looper(LooperAction)` for every
-  control it has, the button latches included; the shell applies them
-  through `LooperState::act`.
-- **9i. Tests - done.** `temp_dir` was written four times; it's one
-  test-only `test_support.rs` now. The other same-named helpers
-  (`settings`, `start`) do different jobs and stay apart.
-- **9j. Docs - done.** README's module diagram redrawn (`app.rs` in the
-  shell; tempo, pedal, writer and metronome added); stale doc comments
-  in `state_machine.rs`, `can_overdub` and `looper-ui-egui`; the user
-  guide's first-run list given the metronome, time signature and record
-  mode, its controls table the two missing cases, and its "not yet"
-  list brought up to date, and the screenshot retaken - Extended, three
-  layers playing.
-- **9k. The settings screen a leaf - done.** Its widgets edit a copy of
-  the choice, returned as `Action::EditSettings` if it changed;
-  `SettingsState::edit` re-asks the backends only when the driver or a
-  device changed, where `render` used to enumerate itself.
-
-### 10. Manual test plan
+### 10. Manual test plan - next
 
 A checklist in `docs/test-plan.md` for a person at the real app, once
 step 9's fixes are in, so it tests what ships. Every control on both
