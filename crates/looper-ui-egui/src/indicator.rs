@@ -16,21 +16,17 @@ pub struct Readout {
     pub arming_fraction: f32,
     /// Stop was pressed, and recording carries on to the bar line.
     pub finishing_bar: bool,
-    /// The main control walks record, dub, play, dub, play, and a double
-    /// press stops - so a single press while playing dubs rather than
-    /// stops.
-    pub dub_cycle: bool,
-    /// Whether there's a layer left for that dub.
-    pub can_dub: bool,
+    /// A press while dubbing keeps the layer and dubs the next, rather
+    /// than plays.
+    pub dubs_on: bool,
 }
 
 /// Label for the main button: what a short press does next, or a trash
 /// icon while a long-press-clear is being held. Arming gets a cancel
 /// cross of its own, because a press there throws the pending recording
-/// away rather than stopping one that's under way. Overdubbing shows a
-/// stop square rather than looping's pause, so the two playing states
-/// aren't told apart only by the indicator dot. In the dub cycle playing
-/// shows record and dubbing shows play, since that's where a press goes.
+/// away rather than stopping one that's under way. A press never stops,
+/// so nothing here shows pause or stop: playing shows record, since a
+/// press dubs.
 ///
 /// Every glyph here has to exist in egui's bundled fonts, which carry a
 /// limited subset - anything else renders as an empty box.
@@ -38,17 +34,12 @@ pub fn press_button_label(readout: &Readout, long_press_active: bool) -> &'stati
     if long_press_active {
         return "🗑";
     }
-    // In the dub cycle a single press never stops, so showing pause or
-    // stop there says the opposite of what it does - a press seen as
-    // "pause" that started another layer instead, every time.
     match readout.state {
-        LoopState::Idle => "⏺",
+        LoopState::Idle | LoopState::Looping => "⏺",
+        LoopState::Overdubbing if readout.dubs_on => "⏺",
         LoopState::Arming => "✖",
-        LoopState::Looping if readout.dub_cycle && readout.can_dub => "⏺",
-        LoopState::Overdubbing if readout.dub_cycle => "▶",
-        LoopState::Recording | LoopState::Overdubbing => "⏹",
-        LoopState::Looping => "⏸",
-        LoopState::Stopped => "▶",
+        LoopState::Recording => "⏹",
+        LoopState::Overdubbing | LoopState::Stopped => "▶",
     }
 }
 

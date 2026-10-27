@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
-    AfterTake, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, VOLUME_PCT_RANGE,
+    LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, VOLUME_PCT_RANGE,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -205,12 +205,14 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
             .text("Metronome")
             .suffix(" BPM"),
     );
-    // What the press that ends the first take does next. Overdub is the
-    // NUX's REC -> DUB -> PLAY: the second part goes down straight away.
+    // ">" rather than an arrow: egui's bundled proportional font has no
+    // arrow glyph, and it would show as an empty box.
     ui.horizontal(|ui| {
-        ui.label("After recording");
-        ui.radio_value(&mut settings.config.after_take, AfterTake::Play, "Play");
-        ui.radio_value(&mut settings.config.after_take, AfterTake::Dub, "Overdub");
+        ui.label("Record mode");
+        ui.radio_value(&mut settings.config.record_mode, RecordMode::RecPlay, "REC > PLAY")
+            .on_hover_text("The take plays; Space then dubs and plays in turn");
+        ui.radio_value(&mut settings.config.record_mode, RecordMode::RecDub, "REC > DUB")
+            .on_hover_text("The take goes straight into a dub; Space then dubs the next layer");
     });
 
     ui.add_space(8.0);

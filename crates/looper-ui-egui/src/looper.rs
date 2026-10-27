@@ -1,11 +1,11 @@
 use looper_core::action::Action;
-use looper_core::config::Mode;
-use looper_core::state_machine::LoopState;
+use looper_core::config::{Mode, RecordMode};
+
 use looper_core::looper::LooperState;
 use crate::indicator;
 
 /// The secondary buttons share a size, so the row can be measured and
-/// centered without laying it out twice. Two of them fit a row.
+/// centered without laying it out twice. Three of them fit the window.
 const CONTROL_BUTTON_SIZE: [f32; 2] = [88.0, 24.0];
 
 /// The metronome row: a toggle naming its tempo, between a slower and a
@@ -40,27 +40,22 @@ fn readout(looper: &LooperState) -> indicator::Readout {
         countdown_secs: looper.preroll_remaining_secs(),
         arming_fraction: looper.preroll_progress(),
         finishing_bar: looper.is_finishing_bar(),
-        dub_cycle: looper.dub_cycle(),
-        can_dub: looper.can_overdub(),
+        dubs_on: looper.dubs_on(),
     }
 }
 
 pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
     let mut action = None;
-    let (overdub_pressed, stop_pressed, remove_pressed, redo_pressed, metronome_pressed) =
-        ui.ctx().input(|i| {
-            (
-                // Edge-triggered, unlike the main control: none of these has
-                // a long-press meaning, so there's nothing to time. The
-                // spacebar is read where the looper is ticked, in `main.rs`.
-                i.key_pressed(egui::Key::O),
-                i.key_pressed(egui::Key::S),
-                i.key_pressed(egui::Key::R),
-                // Y, after Ctrl+Y: redo's key wherever there's an undo.
-                i.key_pressed(egui::Key::Y),
-                i.key_pressed(egui::Key::M),
-            )
-        });
+    let (stop_pressed, redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
+        (
+            // Edge-triggered, unlike the main control: none of these has
+            // a long-press meaning, so there's nothing to time. The
+            // spacebar is read where the looper is ticked, in `main.rs`.
+            i.key_pressed(egui::Key::S),
+            i.key_pressed(egui::Key::R),
+            i.key_pressed(egui::Key::M),
+        )
+    });
     let readout = readout(looper);
 
     egui::Frame::default()
@@ -131,10 +126,8 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // Allocated at exactly the row's own width so the
                 // centering layout above can center it - a plain
                 // `horizontal` would take the full width and sit left.
-                // Two rows of two, since four don't fit the window:
-                // what plays on top, what edits the layers below.
                 let row = egui::vec2(
-                    CONTROL_BUTTON_SIZE[0] * 2.0 + ui.spacing().item_spacing.x,
+                    CONTROL_BUTTON_SIZE[0] * 3.0 + ui.spacing().item_spacing.x * 2.0,
                     CONTROL_BUTTON_SIZE[1],
                 );
                 ui.allocate_ui_with_layout(
@@ -142,27 +135,6 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         // Each names its key, like the hint lines do.
-                        // Kept short deliberately: the buttons are a
-                        // fixed width so the row can be centered, and
-                        // "Finish overdub (O)" doesn't fit in it.
-                        let overdub_label = if looper.state() == LoopState::Overdubbing {
-                            "Finish (O)"
-                        } else {
-                            "Overdub (O)"
-                        };
-                        let overdub_clicked = ui
-                            .add_enabled_ui(looper.can_overdub(), |ui| {
-                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new(overdub_label))
-                            })
-                            .inner
-                            .clicked();
-                        if overdub_clicked || overdub_pressed {
-                            looper.toggle_overdub();
-                        }
-
-                        // Always a stop, whichever cycle the main control
-                        // is on - in the dub cycle it's the only one-press
-                        // stop there is.
                         let stop_clicked = ui
                             .add_enabled_ui(looper.can_stop(), |ui| {
                                 ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Stop (S)"))
@@ -172,25 +144,20 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                         if stop_clicked || stop_pressed {
                             looper.stop();
                         }
-                    },
-                );
-                ui.allocate_ui_with_layout(
-                    row,
-                    egui::Layout::left_to_right(egui::Align::Center),
-                    |ui| {
-                        let remove_clicked = ui
+
+                        let undo_clicked = ui
                             .add_enabled_ui(looper.can_remove_layer(), |ui| {
-                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Remove (R)"))
+                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Undo"))
                             })
                             .inner
                             .clicked();
-                        if remove_clicked || remove_pressed {
+                        if undo_clicked {
                             looper.remove_last_layer();
                         }
 
                         let redo_clicked = ui
                             .add_enabled_ui(looper.can_redo_layer(), |ui| {
-                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Redo (Y)"))
+                                ui.add_sized(CONTROL_BUTTON_SIZE, egui::Button::new("Redo (R)"))
                             })
                             .inner
                             .clicked();
@@ -210,23 +177,14 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // Kept to short lines: one long one would wrap raggedly
                 // at this window width.
                 ui.add_space(4.0);
-                // Says which cycle the main control is on: the dub cycle
-                // changes what a single press does, and adds the double.
-                if looper.dub_cycle() {
-                    ui.label("Space or button: record / dub / play");
-                    ui.label(format!(
-                        "Double-tap or S to stop  |  hold {:.1}s to clear",
-                        looper.long_press_secs()
-                    ));
-                } else {
-                    ui.label("Space or button: record / loop / stop");
-                    ui.label(format!(
-                        "Hold either {:.1}s to clear",
-                        looper.long_press_secs()
-                    ));
-                }
-                ui.label("O: overdub  |  S: stop");
-                ui.label("R: remove  |  Y: redo");
+                // Says which mode the main control is in: it changes what
+                // a press does while dubbing.
+                ui.label(match looper.record_mode() {
+                    RecordMode::RecPlay => "Space or button: record / play / dub",
+                    RecordMode::RecDub => "Space or button: record / dub / next dub",
+                });
+                ui.label("S or double-tap: stop  |  R: redo");
+                ui.label(format!("Hold Space {:.1}s to clear", looper.long_press_secs()));
                 ui.label("M: metronome  |  , and . : tempo");
 
                 if looper.mode() == Mode::Extended {

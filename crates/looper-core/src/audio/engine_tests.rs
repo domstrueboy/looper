@@ -426,6 +426,76 @@ fn an_abandoned_dub_is_reported_dropped() {
     assert_eq!(path.output.stack.layer_count(), 1, "and gone from the stack");
 }
 
+/// A first take played round once, then a dub of one block.
+fn dubbing(control: &Arc<SharedControl>, path: &mut AudioPath, next: &mut f32) {
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(path, &ramp(next));
+    }
+    control.publish_state(LoopState::Looping);
+    drive(path, &ramp(next));
+    control.publish_state(LoopState::Overdubbing);
+    drive(path, &ramp(next));
+}
+
+#[test]
+fn a_next_layer_request_splits_the_dub_where_it_lands() {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+    dubbing(&control, &mut path, &mut next);
+
+    control.request_next_layer();
+    drive(&mut path, &ramp(&mut next));
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    // The dub opened a block in, after one played; the next layer picks
+    // up on the sample the first left off.
+    let ends = ends(&mut captured);
+    assert_eq!(
+        ends[ends.len() - 2..],
+        [
+            TakeEnd::Overdub {
+                samples: BLOCK,
+                start: BLOCK,
+            },
+            TakeEnd::Overdub {
+                samples: BLOCK,
+                start: 2 * BLOCK,
+            },
+        ]
+    );
+    assert_eq!(path.output.stack.layer_count(), 3);
+}
+
+#[test]
+fn a_take_back_arriving_with_its_next_layer_drops_only_the_new_one() {
+    // A double press in REC→DUB, both halves inside one block: the split
+    // has to happen before the abandon, or it'd drop the layer before.
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+    dubbing(&control, &mut path, &mut next);
+
+    control.request_next_layer();
+    control.request_abandon_take();
+    control.publish_state(LoopState::Looping);
+    drive(&mut path, &ramp(&mut next));
+
+    let ends = ends(&mut captured);
+    assert_eq!(
+        ends.last(),
+        Some(&TakeEnd::Dropped {
+            samples: 0,
+            first: false,
+        })
+    );
+    assert_eq!(path.output.stack.layer_count(), 2, "the dub before it kept");
+}
+
 #[test]
 fn a_clear_reports_the_open_take_dropped_then_cleared() {
     let settings = test_settings();

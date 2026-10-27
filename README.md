@@ -284,44 +284,48 @@ see any of the pairs above. Run them with `cargo test`.
 
 ## State machine
 
-Mimics a classic single-footswitch looper pedal:
+The two-pedal layout most loopers share (Boss RC-30, Ditto X2, the NUX
+Dual Loop with its CTRL switch): a main control that never stops, and a
+stop.
 
-1. **Idle** (empty) --press--> **Recording**
-2. **Recording** --press--> **Looping** (recording stops, loop length is
-   fixed, playback starts immediately and loops seamlessly)
-3. **Looping** --press--> **Stopped** (playback silenced, loop stays in
-   memory)
-4. **Stopped** --press--> **Looping** (resumes the same loop)
+| From | Press | Stop (`S`) |
+|---|---|---|
+| **Idle** | **Recording** (or **Arming**, below) | - |
+| **Recording** | ends the take: **Looping**, or **Overdubbing** in REC→DUB | ends the take: **Stopped** |
+| **Looping** | **Overdubbing** - nothing with every layer used | **Stopped** |
+| **Overdubbing** | keeps the layer: **Looping**, or the next layer in REC→DUB | keeps the layer: **Stopped**, or **Looping** in REC→DUB |
+| **Stopped** | **Looping** | - |
+
+`record_mode` picks the cells that differ. REC→DUB never leaves dubbing
+on a press, so its stop steps down - dubbing to playing to stopped. The
+press ending the first take into a dub publishes `Overdubbing` straight
+from `Recording`, which the audio thread already takes in one go - close
+the take, round it to the bar, open a layer at the top - and reports both
+takes' ends, so the mirror splits them where the stack did. Not with
+`max_layers = 1`: there's no layer to dub into.
+
+REC→DUB's "next layer" changes no state, so it crosses as a request of
+its own (`request_next_layer`): the audio thread closes the open dub and
+opens the next on the same sample, reporting the end like any other.
+It's taken after loading the state and before applying it - a state
+change seen means the request made before it is seen too, so a double
+press's take-back can't land on the layer before the new one.
 
 **Long-press**, from any state, clears the loop and returns to Idle - it
 fires the moment the hold crosses the threshold while still held, not on
 release. How long that hold is is the `long_press_ms` setting, 2s by
 default, and the looper screen's hint line says the configured value.
 
-With `after_take = "dub"` the main control walks **record -> dub ->
-play -> dub -> play**, every dub a new layer, and a **double press**
-stops - the NUX Dual Loop Stereo's footswitch. The press ending the
-first take publishes `Overdubbing` straight from `Recording`, which the
-audio thread already takes in one go - close the take, round it to the
-bar, open a layer at the top - and reports both takes' ends, so the
-mirror splits them where the stack did. Not with `max_layers = 1`:
-there's no layer to dub into.
-
-A double is two presses within 400 ms (`input.rs`), and since a press
-acts as it goes down, the first half has already happened by the time
-the second arrives. So the double takes it back: a dub the first half
-opened is *abandoned* - `request_abandon_take` is set before the state
-change is published, the audio thread drops the open layer rather than
-counting it and reports it dropped, and the mirror skips its samples -
-so a double never leaves a sliver of a layer. Three quick presses are a double and a single, not
-two doubles. Outside the dub cycle a single press already stops, so a
-double is just two presses.
-
-**Stop** (`S` or its button, `LooperState::stop`) is the NUX's second
-footswitch: one press, either cycle, from any state that plays,
-records or counts in. Unlike the double it *keeps* what's in progress -
-nothing of it was started by mistake - so a dub is finished, a take is
-ended (rounded as usual) and both stop at once.
+A **double press** - two within 400 ms (`input.rs`) - does what Stop
+does, for one key or pedal. Since a press acts as it goes down, the first
+half has already happened by the time the second arrives, so the double
+takes it back first, from the state it remembers the first acting from
+(`pressed_from`): a dub the first half opened is *abandoned* -
+`request_abandon_take` is set before the state change is published, the
+audio thread drops the open layer rather than counting it and reports it
+dropped, and the mirror skips its samples - and a take or count-in begun
+on an empty looper leaves it empty. Three quick presses are a double and
+a single, not two doubles.
 
 A **press** acts the moment the control goes down, not when it's let
 go. Waiting for the release, to be sure a press wasn't the start of a
@@ -363,28 +367,18 @@ off the click for good. Three things make it work:
 - A count-in cancelled after its take opened arrives as `Arming` ->
   `Idle` with a take open; the stack drops it and reports it dropped.
 
-**Overdub** deliberately sits *off* that cycle, on its own control (the
-`O` key or the Overdub button), so the press cycle above keeps behaving
-as the four states above: **Looping** <--overdub--> **Overdubbing**. A
-press while overdubbing stops playback, like it does while looping - the
-main control always means "stop" when something is playing.
-
 ### Layers
 
 The first recording fixes the loop length; each overdub adds another
 layer on top, and playback is their sum. `max_layers` of them can be
 stacked, four by default, and the newest can be dropped again
-("Remove"). Dropping the only one takes the state back to `Idle`, but
-isn't a clear: redo can still bring it back.
+("Undo"). Never the first take: emptying the loop is a clear's job.
 
 "Redo" brings a dropped layer back. It costs almost nothing: removing
 only lowers the stack's count, and the samples stay in the buffer until
 the next take is recorded into that slot. So the stack counts how many
 layers above `count` are still intact, and forgets them all the moment a
-take begins. Removing the last layer stashes the loop length, so the
-stack reads as empty until a redo restores it; the loop returns
-`Stopped`, as a saved one does at startup. A long-press clear stays
-final. The mirror keeps the dropped takes for the same window, so
+take begins. A long-press clear stays final. The mirror keeps the dropped takes for the same window, so
 a redone layer is saved again; the two are driven by the same events and
 a test holds each to the same rule. Not across restarts.
 
@@ -558,7 +552,7 @@ window opened.
 | `preroll_ms` | 4000 | 0-5000 | wait before recording starts; 0 = off |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold clears the loop |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
-| `after_take` | `"play"` | `"play"`, `"dub"` | what the press ending the first take does next |
+| `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"` | REC→PLAY or REC→DUB - see "State machine"; the older `after_take = "play"/"dub"` still reads |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |
 | `max_loop_secs` | 60 | 10-120 | longest recordable loop |
 | `max_layers` | 4 | 1-8 | layers including the first recording |

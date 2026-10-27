@@ -13,6 +13,9 @@ pub struct SharedControl {
     /// Set just before a state change that ends a take, when the take is
     /// to be thrown away rather than kept - a double press's first half.
     abandon_take_requested: AtomicBool,
+    /// Ends the overdub in progress and opens the next one, with no state
+    /// change to carry it: dubbing goes on, into a layer of its own.
+    next_layer_requested: AtomicBool,
     // Telemetry the other way, audio -> UI: duration, progress bar, and
     // how many layers are stacked up.
     loop_len: AtomicUsize,
@@ -55,6 +58,7 @@ impl SharedControl {
             remove_layer_requested: AtomicBool::new(false),
             redo_layer_requested: AtomicBool::new(false),
             abandon_take_requested: AtomicBool::new(false),
+            next_layer_requested: AtomicBool::new(false),
             loop_len: AtomicUsize::new(0),
             play_pos: AtomicUsize::new(0),
             layer_count: AtomicUsize::new(0),
@@ -106,6 +110,12 @@ impl SharedControl {
     /// sees the change, so seeing the change means seeing this too.
     pub fn request_abandon_take(&self) {
         self.abandon_take_requested.store(true, Ordering::Release);
+    }
+
+    /// One-shot, like `request_clear`. Only means anything while
+    /// overdubbing; the audio thread drops it otherwise.
+    pub fn request_next_layer(&self) {
+        self.next_layer_requested.store(true, Ordering::Release);
     }
 
     pub fn layer_count(&self) -> usize {
@@ -163,6 +173,10 @@ impl SharedControl {
 
     pub(super) fn take_abandon_take_request(&self) -> bool {
         self.abandon_take_requested.swap(false, Ordering::AcqRel)
+    }
+
+    pub(super) fn take_next_layer_request(&self) -> bool {
+        self.next_layer_requested.swap(false, Ordering::AcqRel)
     }
 
     pub(super) fn take_redo_layer_request(&self) -> bool {

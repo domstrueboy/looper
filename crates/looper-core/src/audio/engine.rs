@@ -181,6 +181,20 @@ impl OutputPath {
             // Every block, on or off: a take ending is rounded to the
             // bar at the tempo it was played to.
             self.metronome.set_bpm(self.control.metronome_bpm());
+            // After loading the state, before applying it: a state
+            // change seen here means the request made before it is seen
+            // too, so a double press's take-back - abandoning the layer
+            // its first half opened - can't land on the layer before.
+            if self.control.take_next_layer_request()
+                && self.previous_state == LoopState::Overdubbing
+                && let Some(ended) = self.stack.open_take()
+            {
+                self.stack.finish_overdub();
+                let samples = std::mem::take(&mut self.take_samples);
+                let end = take_end(&self.stack, ended, samples, false);
+                push_end(&mut self.ends, &self.control, end);
+                self.stack.begin_overdub();
+            }
             if state != self.previous_state {
                 // A count-in may have opened the take already, on the
                 // bar line; Recording arriving then is the UI catching up.

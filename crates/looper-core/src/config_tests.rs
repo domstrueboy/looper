@@ -14,7 +14,7 @@ fn saved() -> AppConfig {
         max_layers: 6,
         long_press_ms: 1_500,
         metronome_bpm: 92,
-        after_take: AfterTake::Dub,
+        record_mode: RecordMode::RecDub,
         mode: Mode::Extended,
     }
 }
@@ -34,7 +34,7 @@ fn a_round_trip_keeps_every_setting() {
     assert_eq!(read.max_layers, 6);
     assert_eq!(read.long_press_ms, 1_500);
     assert_eq!(read.metronome_bpm, 92);
-    assert_eq!(read.after_take, AfterTake::Dub);
+    assert_eq!(read.record_mode, RecordMode::RecDub);
     assert_eq!(read.mode, Mode::Extended);
 }
 
@@ -62,8 +62,27 @@ fn settings_added_later_fall_back_to_their_defaults() {
     assert_eq!(config.max_layers, DEFAULT_MAX_LAYERS);
     assert_eq!(config.long_press_ms, DEFAULT_LONG_PRESS_MS);
     assert_eq!(config.metronome_bpm, DEFAULT_METRONOME_BPM);
-    assert_eq!(config.after_take, AfterTake::Play, "what the pedal always did");
+    assert_eq!(config.record_mode, RecordMode::RecPlay, "what the pedal always did");
     assert_eq!(config.mode, Mode::Mini);
+}
+
+#[test]
+fn an_after_take_saved_before_reads_as_its_record_mode() {
+    let read = |after_take: &str| {
+        AppConfig::from_toml(&format!(
+            "device_name = \"iD4\"\nsample_rate = 44100\nafter_take = \"{after_take}\"\n"
+        ))
+        .expect("parses")
+        .record_mode
+    };
+    assert_eq!(read("play"), RecordMode::RecPlay);
+    assert_eq!(read("dub"), RecordMode::RecDub);
+}
+
+#[test]
+fn the_record_mode_is_written_under_its_own_name() {
+    let text = saved().to_toml().expect("serializes");
+    assert!(text.contains("record_mode = \"rec_dub\""), "got: {text}");
 }
 
 #[test]

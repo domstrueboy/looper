@@ -315,7 +315,7 @@ How the main control behaves, as settings rather than one fixed way.
   stops, taking back a dub its first half had just opened. A **Stop**
   control (S, and a button) stops in one press in either mode, keeping
   what was in progress - the NUX's second footswitch.
-- **7f. Two pedals - next.** 7b grew two ways to stop and two to dub;
+- **7f. Two pedals - done.** 7b grew two ways to stop and two to dub;
   this replaces them with the two-pedal layout most loopers share.
   Space never stops; **S** always does, keeping what's in progress. A
   **double press** of Space always does exactly what S does - no
@@ -334,7 +334,7 @@ How the main control behaves, as settings rather than one fixed way.
 
   Space while stopped plays, in every mode. A mode only changes these
   cells; the rest is shared.
-- **7g. Hold to undo, hold to clear.** Hold Space undoes the last
+- **7g. Hold to undo, hold to clear - next.** Hold Space undoes the last
   layer, one per hold; hold S clears. A press acts as it goes down, so
   a hold first takes back what its press did - a dub it opened is
   abandoned, as the double press did - then undoes. Holding while

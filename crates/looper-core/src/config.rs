@@ -49,15 +49,21 @@ pub enum Mode {
 pub const METRONOME_BPM_RANGE: RangeInclusive<u32> = 40..=300;
 pub const DEFAULT_METRONOME_BPM: u32 = 120;
 
-/// What the main control does when it ends the first take: start the
-/// loop playing, or go straight on into an overdub - for putting down the
-/// second part without waiting a pass for it.
+/// Where the main control goes when it ends the first take, and what it
+/// does while dubbing. Read from the older `after_take = "play" / "dub"`
+/// too, so a config saved before keeps its choice.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AfterTake {
+#[serde(rename_all = "snake_case")]
+pub enum RecordMode {
+    /// The take plays; a press while dubbing keeps the layer and plays.
     #[default]
-    Play,
-    Dub,
+    #[serde(alias = "play")]
+    RecPlay,
+    /// The take goes straight on into a dub, and a press while dubbing
+    /// keeps the layer and dubs the next - layer after layer without
+    /// playing in between.
+    #[serde(alias = "dub")]
+    RecDub,
 }
 
 const CONFIG_DIR: &str = "looper-pedal";
@@ -116,9 +122,9 @@ pub struct AppConfig {
     /// See `METRONOME_BPM_RANGE`.
     #[serde(default = "default_metronome_bpm")]
     pub metronome_bpm: u32,
-    /// See `AfterTake`.
-    #[serde(default)]
-    pub after_take: AfterTake,
+    /// See `RecordMode`.
+    #[serde(default, alias = "after_take")]
+    pub record_mode: RecordMode,
     /// See `Mode`. Switched from the looper screen, not from Settings.
     #[serde(default)]
     pub mode: Mode,
@@ -259,7 +265,7 @@ impl Default for AppConfig {
             max_layers: DEFAULT_MAX_LAYERS,
             long_press_ms: DEFAULT_LONG_PRESS_MS,
             metronome_bpm: DEFAULT_METRONOME_BPM,
-            after_take: AfterTake::Play,
+            record_mode: RecordMode::RecPlay,
             mode: Mode::Mini,
         }
     }

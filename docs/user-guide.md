@@ -1,9 +1,8 @@
 # Looper Pedal - User Guide
 
 A simple looper pedal for practicing guitar, replacing a hardware looper
-like the TC Electronic Ditto. One main control - press to record, press
-to loop, press to stop, hold to clear - plus overdub, for stacking a few
-layers on top of the loop.
+like the TC Electronic Ditto. Two controls, like a two-pedal looper: a
+main one that records, plays and stacks layers, and a stop.
 
 ## First run
 
@@ -62,18 +61,20 @@ Delete it to start over from the Settings screen.
 ![The looper screen, playing back a recorded loop](looper-screen.png)
 
 *Mid-loop: one layer recorded, the bar showing where in the loop
-playback is, and the main button offering pause.*
+playback is.*
 
-One control drives everything - either the **spacebar** or the on-screen
-round button. They're fully interchangeable.
+The main control is the **spacebar** or the on-screen round button -
+they're fully interchangeable. It never stops the loop; that's **Stop**.
 
-| Press | What happens |
+| Control | What happens |
 |---|---|
-| 1st press | Start recording (or start the countdown, with a record delay set) |
-| 2nd press | Stop recording, loop starts playing immediately |
-| 3rd press | Stop the loop (silence, but it's still remembered) |
-| 4th press | Resume playing the same loop |
-| **Hold it down** | Clear the loop, from any state - back to empty. Two seconds by default; the hint line under the buttons says how long yours is set to |
+| **Space** | Record, then play and dub in turn - see **Record mode** below. On a stopped loop, play |
+| **S** (or **Stop**) | Stop. A take or a layer in progress is kept; a record delay or count-in is called off |
+| **Space twice quickly** | The same as S - for when you only have one key or pedal |
+| **Hold Space** | Clear the loop, from any state - back to empty. Two seconds by default; the hint line under the buttons says how long yours is set to |
+
+The round button shows what a press does next: ⏺ records or dubs, ▶
+plays, ⏹ ends the take.
 
 Your live guitar signal is always audible, whether or not a loop is
 playing - the loop just plays back on top of it.
@@ -95,13 +96,28 @@ The colored dot shows what's happening:
 
 ## Overdubbing
 
-Once a loop is playing, press **O** (or the **Overdub** button) to start
-layering on top of it. Whatever you play is added to the loop; press
-**O** again to finish that layer. **Max layers** in Settings sets how
-many you can stack including the first recording - four by default - and
-the counter under the buttons shows where you are.
+Once a loop is playing, press Space to layer on top of it. Whatever you
+play is added to the loop. **Max layers** in Settings sets how many you
+can stack including the first recording - four by default - and the
+counter under the buttons shows where you are. With every layer used, a
+press does nothing.
 
-A few things worth knowing:
+### Record mode
+
+**Record mode** in Settings picks what Space does after the first take:
+
+| | REC > PLAY (default) | REC > DUB |
+|---|---|---|
+| Press ending the take | the loop plays | straight into a dub, for the second part |
+| Press while dubbing | keeps the layer, plays | keeps the layer, dubs the next one |
+| Press while playing | dubs a new layer | dubs a new layer |
+| **S** while dubbing | stops | keeps the layer, plays - press again to stop |
+
+REC > DUB is for building up part after part without a silent pass
+between: press at the top of each pass and the next part goes on a layer
+of its own. When the last layer is reached, the press plays instead.
+
+### Good to know
 
 - You won't hear the layer you're currently playing come back at you
   while you play it - you're already hearing yourself live. It joins the
@@ -111,39 +127,16 @@ A few things worth knowing:
   erasing what you already put down.
 - You don't have to start at the top of the loop. Start wherever you
   like, stop whenever you like - only the part you played is recorded.
-- **Remove** (**R**) drops the most recent layer if you're not happy with
-  it, leaving the others playing. Dropping the only remaining layer
-  leaves nothing to play, so the looper goes back to waiting for a new
-  recording.
-- **Redo** (**Y**) brings a removed layer back, exactly as it was. Remove
-  several and they come back newest first. Even the very last layer can
-  come back - the loop returns stopped, so press to play it. This works
-  until you record something new or clear the loop with a long hold -
-  and not after the app is closed.
-- Pressing the main control (space or the round button) while
-  overdubbing stops playback, exactly as it does while looping. The
-  layer you were recording is kept.
-- To put the second part down without waiting a pass, set **After
-  recording** to **Overdub** in Settings. Then the main control works
-  like the NUX Dual Loop Stereo's footswitch:
-
-  | Press | Does |
-  |---|---|
-  | Once, while recording | ends the take and goes straight into an overdub |
-  | Once, while overdubbing | keeps that layer and plays on |
-  | Once, while playing | starts the next overdub - every one a layer of its own |
-  | **Twice quickly** | **stops** |
-
-  A quick double press never leaves a tiny layer behind: if the first
-  press had just started an overdub, the second throws it away. On an
-  empty looper, a double press leaves it empty. With every layer used, a
-  single press does nothing - double-press to stop. The hint lines under
-  the buttons show which way Space is working, and the round button
-  shows where a press goes: ⏺ while playing, ▶ while overdubbing.
-- **Stop** (**S**) always stops in one press, in either mode - the NUX's
-  second footswitch. A take or an overdub in progress is kept; a
-  count-in or record delay is called off. In Overdub mode it's the way
-  out when a double-tap is awkward.
+- A quick double press never leaves a tiny layer behind: if the first
+  press had just started a layer, the second throws it away. On an
+  empty looper, a double press leaves it empty.
+- **Undo** drops the most recent layer if you're not happy with it,
+  leaving the others playing. It never takes the first recording - hold
+  Space to clear everything.
+- **Redo** (**R**) brings an undone layer back, exactly as it was. Undo
+  several and they come back newest first. This works until you record
+  something new or clear the loop with a long hold - and not after the
+  app is closed.
 - Every layer plays at the level you recorded it, so play each one at
   the volume you want it in the mix. If the stack ends up too loud
   overall, turn **Loop volume** down in Settings - it covers the whole
@@ -170,7 +163,7 @@ tempo.
   loop each time round.
 
 With the metronome on, a new loop always comes out a whole number of
-bars, so the click never stumbles at the top. When you press stop, it
+bars, so the click never stumbles at the top. When you end the take, it
 snaps to the nearest bar line:
 
 - **A little late** - the extra is cut off, back to the bar line you
