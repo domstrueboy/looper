@@ -82,5 +82,6 @@ The agent must **never commit on its own**. Every commit requires an explicit us
 
 - Agents may create session-specific plans in their own dirs (`.gigacode_vsc/plans/`, `.claude/plans/`, etc.) — those are scratch, ignored by git.
 - When an agent completes work, it updates `PLAN.md` — mark items done, remove open decisions, note new ones if they surface.
+- A finished step's write-up moves to the version's archive (`v1-archive.md`, `v2-archive.md`) once the whole step is done, leaving `PLAN.md` short.
 - Keep it ordered. Don't dump a list — sequence matters when the next agent picks it up.
 - Don't duplicate what's in README. `PLAN.md` is about what's *ahead*, not what's behind.
