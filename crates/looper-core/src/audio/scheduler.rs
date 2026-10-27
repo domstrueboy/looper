@@ -142,17 +142,17 @@ impl Voice {
         self.pos = Some(0);
     }
 
-    /// Adds what's left of `sound` onto `out`, as far as either runs.
-    /// Added rather than written: it plays over the loop and the live
-    /// signal, not instead of them.
-    pub fn add_into(&mut self, sound: &[f32], out: &mut [f32]) {
+    /// Adds what's left of `sound` onto `out` at `gain`, as far as either
+    /// runs. Added rather than written: it plays over the loop and the
+    /// live signal, not instead of them.
+    pub fn add_into(&mut self, sound: &[f32], out: &mut [f32], gain: f32) {
         let Some(pos) = self.pos else {
             return;
         };
         let remaining = sound.get(pos..).unwrap_or(&[]);
         let n = remaining.len().min(out.len());
         for (o, s) in out[..n].iter_mut().zip(remaining) {
-            *o += s;
+            *o += s * gain;
         }
         self.pos = (pos + n < sound.len()).then_some(pos + n);
     }

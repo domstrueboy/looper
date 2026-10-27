@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
     DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode, VOLUME_PCT_RANGE,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -175,11 +175,6 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     ui.add_space(8.0);
     ui.separator();
 
-    ui.add(
-        egui::Slider::new(&mut settings.config.volume_pct, VOLUME_PCT_RANGE)
-            .text("Loop volume")
-            .suffix("%"),
-    );
     // Each start's own setting sits under it, and only shows when that
     // start is picked: a delay slider beside Detect would look like it
     // does something.

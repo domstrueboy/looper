@@ -368,7 +368,7 @@ How the main control behaves, as settings rather than one fixed way.
 
 - **8a. Tap tempo - done.** A key tapped two or more times sets the tempo from
   the gaps between taps. Not while a loop sets the tempo.
-- **8b. Levels on screen.** Click volume (fixed at half scale today)
+- **8b. Levels on screen - done.** Click volume (fixed at half scale today)
   and loop volume (only in Settings today) as live controls on the
   looper screen, published through `SharedControl` like the tempo.
 - **8c. Time signature.** 4/4, 3/4 or 6/8 for the metronome - the

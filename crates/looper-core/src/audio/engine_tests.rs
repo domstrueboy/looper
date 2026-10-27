@@ -759,3 +759,25 @@ fn a_called_off_stop_plays_on_from_where_it_held() {
     assert_eq!(path.output.stack.play_pos(), BLOCK, "moving again, from the top");
 }
 
+// --- Levels -----------------------------------------------------------------
+
+/// The first blocks of the click on its own, at `click_pct`.
+fn clicking_at(click_pct: u32) -> Vec<f32> {
+    let settings = test_settings();
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    control.publish_metronome_on(true);
+    control.publish_click_volume_pct(click_pct);
+    (0..8).flat_map(|_| drive(&mut path, &[0.0; BLOCK])).collect()
+}
+
+#[test]
+fn the_click_plays_at_its_level() {
+    let full = clicking_at(100);
+    assert!(full.iter().any(|&s| s != 0.0), "a click to compare");
+
+    let doubled: Vec<f32> = full.iter().map(|s| s * 2.0).collect();
+    assert_eq!(clicking_at(200), doubled);
+    assert!(clicking_at(0).iter().all(|&s| s == 0.0));
+}
+

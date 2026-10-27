@@ -1,5 +1,5 @@
 use looper_core::action::Action;
-use looper_core::config::{Mode, RecordMode};
+use looper_core::config::{CLICK_VOLUME_PCT_RANGE, Mode, RecordMode, VOLUME_PCT_RANGE};
 
 use looper_core::looper::LooperState;
 use std::time::Instant;
@@ -14,6 +14,9 @@ const CONTROL_BUTTON_SIZE: [f32; 2] = [88.0, 24.0];
 const METRONOME_BUTTON_SIZE: [f32; 2] = [150.0, 24.0];
 const TEMPO_BUTTON_SIZE: [f32; 2] = [24.0, 24.0];
 const TAP_BUTTON_SIZE: [f32; 2] = [52.0, 24.0];
+
+/// Leaves room beside the track for the label and the value.
+const LEVEL_SLIDER_WIDTH: f32 = 150.0;
 
 /// Square, so up to eight fit across the window in one row.
 const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
@@ -182,6 +185,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 );
 
                 metronome_row(ui, looper, metronome_pressed);
+                levels(ui, looper);
 
                 ui.colored_label(
                     egui::Color32::WHITE,
@@ -306,6 +310,41 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
         let tap_down = tap.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_pressed());
         if tap_down || (tap_pressed && !from_loop) {
             looper.tap_tempo(Instant::now());
+        }
+    });
+}
+
+/// Loop and click level, live: heard while dragging, saved when let go.
+/// Saving every frame of a drag would rewrite the config sixty times a
+/// second for nothing.
+fn levels(ui: &mut egui::Ui, looper: &mut LooperState) {
+    // Scoped, so the width stays with these two.
+    ui.scope(|ui| {
+        ui.spacing_mut().slider_width = LEVEL_SLIDER_WIDTH;
+        let mut loop_pct = looper.loop_volume_pct();
+        let loop_slider = ui.add(
+            egui::Slider::new(&mut loop_pct, VOLUME_PCT_RANGE)
+                .text("Loop")
+                .suffix("%"),
+        );
+        if loop_slider.changed() {
+            looper.set_loop_volume_pct(loop_pct);
+        }
+        let mut click_pct = looper.click_volume_pct();
+        let click_slider = ui.add(
+            egui::Slider::new(&mut click_pct, CLICK_VOLUME_PCT_RANGE)
+                .text("Click")
+                .suffix("%"),
+        );
+        if click_slider.changed() {
+            looper.set_click_volume_pct(click_pct);
+        }
+        // A click on the track or a typed value changes it without a drag.
+        let settled = |slider: &egui::Response| {
+            slider.drag_stopped() || (slider.changed() && !slider.dragged())
+        };
+        if settled(&loop_slider) || settled(&click_slider) {
+            looper.save_levels();
         }
     });
 }

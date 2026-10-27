@@ -26,9 +26,7 @@ The first time you launch the app, you'll see a **Settings** screen:
    actually plugged into (e.g. "Input 1"). Only this one channel is used;
    it's centered equally in both ears when you monitor, so it doesn't
    matter that it came from a single input.
-5. **Loop volume** - how loud the loop plays back relative to your live
-   signal
-6. **Record start** - how the first recording begins once you press
+5. **Record start** - how the first recording begins once you press
    Space:
    - **Instant** - right away.
    - **Delay** (the default) - after a countdown, so you have time to get
@@ -40,18 +38,18 @@ The first time you launch the app, you'll see a **Settings** screen:
      your first note so its attack isn't cut. **Start level** sets how
      loud that note has to be; raise it if noise starts the recording on
      its own.
-7. **Stop** - how a playing loop stops: **Immediately**, **At the loop
+6. **Stop** - how a playing loop stops: **Immediately**, **At the loop
    end** (it plays to the end first, so it starts from the top next
    time), or **Fade out** over the **Fade time** you set. While it plays
    out or fades, the screen says so and the button reads **Stop now** -
    press S again to stop at once, or Space to change your mind and keep
    playing. Ending your first recording with S always stops at once.
-8. **Hold to undo / clear** - how long Space or S has to be held
+7. **Hold to undo / clear** - how long Space or S has to be held
    down: Space undoes the last layer, S wipes the loop. Two seconds by
    default.
-9. **Latency** - how much headroom the audio engine keeps. Lower feels
+8. **Latency** - how much headroom the audio engine keeps. Lower feels
    more immediate; if the sound crackles or drops out, raise it.
-10. **Max loop length** and **Max layers** - the longest loop you can
+9. **Max loop length** and **Max layers** - the longest loop you can
    record and how many layers you can stack. Both are reserved in
    memory up front, so the line underneath tells you what your choices
    will cost - there's no reason to ask for more than you'll use.
@@ -166,7 +164,7 @@ it.
   app is closed.
 - Every layer plays at the level you recorded it, so play each one at
   the volume you want it in the mix. If the stack ends up too loud
-  overall, turn **Loop volume** down in Settings - it covers the whole
+  overall, turn **Loop** down on the looper screen - it covers the whole
   loop at once and leaves your live signal untouched.
 
 ## Metronome
@@ -180,7 +178,11 @@ going. It changes straight away, even while the click is playing, and
 the app remembers it. The **Metronome** slider in Settings sets the same
 tempo.
 
-Or **tap** it: press **T** (or click **Tap**) on the beat, two or more
+Under the metronome, **Loop** and **Click** set how loud each plays
+against your live guitar, from silent to twice their normal level. You
+hear a change as you drag, and the app remembers where you left them.
+
+Or **tap** the tempo: press **T** (or click **Tap**) on the beat, two or more
 times, and the tempo follows your taps - the last four gaps, averaged,
 so it settles as you keep tapping. Pause for two seconds and the next
 tap starts a fresh count.

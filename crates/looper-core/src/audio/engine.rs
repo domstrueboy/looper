@@ -201,6 +201,8 @@ impl OutputPath {
             // Every block, on or off: a take ending is rounded to the
             // bar at the tempo it was played to.
             self.metronome.set_bpm(self.control.metronome_bpm());
+            self.metronome
+                .set_gain(self.control.click_volume_pct() as f32 / 100.0);
             // After loading the state, before applying it: a state
             // change seen here means the request made before it is seen
             // too, so a double press's take-back - abandoning the layer

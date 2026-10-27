@@ -95,11 +95,11 @@ fn a_voice_plays_its_sound_across_blocks_and_stops() {
     voice.trigger();
 
     let mut first = [10.0, 10.0];
-    voice.add_into(&sound, &mut first);
+    voice.add_into(&sound, &mut first, 1.0);
     assert_eq!(first, [11.0, 12.0], "added, not written");
 
     let mut second = [0.0; 3];
-    voice.add_into(&sound, &mut second);
+    voice.add_into(&sound, &mut second, 1.0);
     assert_eq!(second, [3.0, 0.0, 0.0]);
     assert!(!voice.is_playing());
 }
@@ -108,7 +108,7 @@ fn a_voice_plays_its_sound_across_blocks_and_stops() {
 fn an_idle_voice_adds_nothing() {
     let mut voice = Voice::default();
     let mut out = [5.0; 2];
-    voice.add_into(&[1.0], &mut out);
+    voice.add_into(&[1.0], &mut out, 1.0);
     assert_eq!(out, [5.0; 2]);
 }
 
@@ -117,10 +117,20 @@ fn retriggering_starts_the_sound_over() {
     let sound = [1.0, 2.0, 3.0];
     let mut voice = Voice::default();
     voice.trigger();
-    voice.add_into(&sound, &mut [0.0; 2]);
+    voice.add_into(&sound, &mut [0.0; 2], 1.0);
 
     voice.trigger();
     let mut out = [0.0; 1];
-    voice.add_into(&sound, &mut out);
+    voice.add_into(&sound, &mut out, 1.0);
     assert_eq!(out, [1.0]);
 }
+
+#[test]
+fn a_voice_plays_at_its_gain() {
+    let mut voice = Voice::default();
+    voice.trigger();
+    let mut out = [0.0; 2];
+    voice.add_into(&[0.5, 1.0], &mut out, 0.5);
+    assert_eq!(out, [0.25, 0.5]);
+}
+

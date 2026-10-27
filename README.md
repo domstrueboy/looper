@@ -451,9 +451,12 @@ layer playing.
 ### Layer volume
 
 There is no per-layer gain: every layer plays back at the level it was
-recorded at, and Settings' single "Loop volume" is the only control over
-them - it scales the whole stack, still leaving the live passthrough
-alone.
+recorded at, and the looper screen's single **Loop** level is the only
+control over them - it scales the whole stack, still leaving the live
+passthrough alone. **Click** beside it scales the metronome the same
+way, through `Voice::add_into`'s gain, which the drums will use too.
+Both cross as atomics and are heard at once; the config is saved when a
+slider is let go, not on every frame of a drag.
 
 Stacked takes can sum past full scale, and nothing upstream clamps them:
 the loop volume is applied to the whole sum, and what is still over full
@@ -592,7 +595,8 @@ window opened.
 
 | Setting | Default | Range | Effect |
 |---|---|---|---|
-| `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched |
+| `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched - set on the looper screen |
+| `click_volume_pct` | 100 | 0-200 | metronome gain; 100 is the click as generated, half full scale |
 | `record_start` | `"delay"` | `"instant"`, `"delay"`, `"count_in"`, `"detect"` | how a first take opens - see "Record start" |
 | `preroll_ms` | 4000 | 0-5000 | the wait, with `delay`; 0 = none |
 | `detect_db` | -40 | -60 to -10 | the level that opens a take, with `detect` |

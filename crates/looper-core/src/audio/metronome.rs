@@ -13,6 +13,8 @@ pub struct Metronome {
     free_pos: u64,
     sample_rate: u32,
     bpm: f64,
+    /// The click's level, 1.0 its own: set live from the looper screen.
+    gain: f32,
 }
 
 impl Metronome {
@@ -24,6 +26,7 @@ impl Metronome {
             free_pos: 0,
             sample_rate,
             bpm: f64::from(bpm),
+            gain: 1.0,
         }
     }
 
@@ -52,6 +55,10 @@ impl Metronome {
     pub fn frames_to_bar_line(&self) -> Option<usize> {
         let line = self.bar_frames().round() as u64;
         line.checked_sub(self.free_pos).map(|frames| frames as usize)
+    }
+
+    pub fn set_gain(&mut self, gain: f32) {
+        self.gain = gain;
     }
 
     /// Counts again from beat one, so the pre-roll's count-in and the
@@ -83,11 +90,11 @@ impl Metronome {
     fn add_from(&mut self, out: &mut [f32], start: u64) {
         let mut done = 0;
         for beat in self.scheduler.events(start, out.len()) {
-            self.voice.add_into(&self.click, &mut out[done..beat.offset]);
+            self.voice.add_into(&self.click, &mut out[done..beat.offset], self.gain);
             self.voice.trigger();
             done = beat.offset;
         }
-        self.voice.add_into(&self.click, &mut out[done..]);
+        self.voice.add_into(&self.click, &mut out[done..], self.gain);
     }
 }
 

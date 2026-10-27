@@ -48,6 +48,8 @@ pub struct SharedControl {
     // than a plain value on the audio side so it can become adjustable
     // without a restart.
     volume_pct: AtomicU32,
+    /// The click's level, UI -> audio, likewise.
+    click_volume_pct: AtomicU32,
     /// Which layers are muted, one bit each, UI -> audio. A bitmask so
     /// every layer's mute crosses in one atomic; `MAX_LAYERS_RANGE` tops
     /// out well inside 32.
@@ -80,6 +82,7 @@ impl SharedControl {
             input_underruns: AtomicUsize::new(0),
             output_underruns: AtomicUsize::new(0),
             volume_pct: AtomicU32::new(volume_pct),
+            click_volume_pct: AtomicU32::new(100),
             muted_layers: AtomicU32::new(0),
             metronome_on: AtomicBool::new(false),
             metronome_bpm: AtomicU64::new(f64::from(metronome_bpm).to_bits()),
@@ -92,6 +95,14 @@ impl SharedControl {
 
     pub fn publish_metronome_bpm(&self, bpm: f64) {
         self.metronome_bpm.store(bpm.to_bits(), Ordering::Release);
+    }
+
+    pub fn publish_volume_pct(&self, pct: u32) {
+        self.volume_pct.store(pct, Ordering::Release);
+    }
+
+    pub fn publish_click_volume_pct(&self, pct: u32) {
+        self.click_volume_pct.store(pct, Ordering::Release);
     }
 
     pub fn publish_muted_layers(&self, muted: u32) {
@@ -258,6 +269,10 @@ impl SharedControl {
 
     pub(super) fn volume_pct(&self) -> u32 {
         self.volume_pct.load(Ordering::Acquire)
+    }
+
+    pub(super) fn click_volume_pct(&self) -> u32 {
+        self.click_volume_pct.load(Ordering::Acquire)
     }
 
     pub(super) fn note_input_underrun(&self) {

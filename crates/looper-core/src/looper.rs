@@ -11,7 +11,8 @@ use crate::audio::scheduler::{Pattern, Scheduler};
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
 use crate::config::{
-    self, AppConfig, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart, StopMode,
+    self, AppConfig, CLICK_VOLUME_PCT_RANGE, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart,
+    StopMode, VOLUME_PCT_RANGE,
 };
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
@@ -144,6 +145,7 @@ impl LooperState {
         dir: PathBuf,
     ) -> Result<Self, String> {
         let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+        control.publish_click_volume_pct(settings.click_volume_pct);
         // Whatever was left from last time, if it still fits what's
         // configured now.
         let restored = loop_mirror::load(&config::loop_dir_in(&dir), settings);
@@ -483,6 +485,35 @@ impl LooperState {
             return;
         }
         self.set_metronome_bpm(self.config.metronome_bpm.saturating_add_signed(delta));
+    }
+
+    pub fn loop_volume_pct(&self) -> u32 {
+        self.config.volume_pct
+    }
+
+    /// The loop's level, heard at once. Not saved here - a slider calls
+    /// it every frame of a drag; `save_levels` when it's let go.
+    pub fn set_loop_volume_pct(&mut self, pct: u32) {
+        self.config.volume_pct = pct.clamp(*VOLUME_PCT_RANGE.start(), *VOLUME_PCT_RANGE.end());
+        self.control.publish_volume_pct(self.config.volume_pct);
+    }
+
+    pub fn click_volume_pct(&self) -> u32 {
+        self.config.click_volume_pct
+    }
+
+    /// The click's level, the same way.
+    pub fn set_click_volume_pct(&mut self, pct: u32) {
+        self.config.click_volume_pct = pct.clamp(
+            *CLICK_VOLUME_PCT_RANGE.start(),
+            *CLICK_VOLUME_PCT_RANGE.end(),
+        );
+        self.control.publish_click_volume_pct(self.config.click_volume_pct);
+    }
+
+    /// Saves both levels, so the next start opens where they were left.
+    pub fn save_levels(&self) {
+        self.save_config();
     }
 
     /// A tap of the tempo key. From the second tap of a count on, the

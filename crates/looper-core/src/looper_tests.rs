@@ -632,6 +632,25 @@ fn tapping_is_ignored_while_a_loop_sets_the_tempo() {
 }
 
 #[test]
+fn levels_are_heard_at_once_and_saved_when_asked() {
+    let (mut looper, driver, dir, _) = two_layers("looper-levels");
+    let silence = vec![0.0; 512];
+    assert!(driver.cycle(&silence).iter().any(|&s| s != 0.0), "playing");
+
+    looper.set_loop_volume_pct(0);
+    looper.set_click_volume_pct(40);
+    assert!(driver.cycle(&silence).iter().all(|&s| s == 0.0), "the loop silenced");
+    let before = AppConfig::load_from(&config::config_path_in(&dir));
+    assert_ne!(before.map(|c| c.volume_pct), Some(0), "not saved mid-drag");
+
+    looper.save_levels();
+
+    let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
+    assert_eq!((saved.volume_pct, saved.click_volume_pct), (0, 40));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn the_tempo_stays_inside_its_range() {
     let (mut looper, _driver, dir) = start("looper-tempo-range", &settings());
     looper.change_metronome_bpm(-1_000);

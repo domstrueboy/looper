@@ -9,6 +9,11 @@ use serde::{Deserialize, Serialize};
 pub const VOLUME_PCT_RANGE: RangeInclusive<u32> = 0..=200;
 pub const DEFAULT_VOLUME_PCT: u32 = 100;
 
+/// The click's level, the same way: 100 is the click as generated, half
+/// full scale, so 200 is as loud as a sample gets.
+pub const CLICK_VOLUME_PCT_RANGE: RangeInclusive<u32> = 0..=200;
+pub const DEFAULT_CLICK_VOLUME_PCT: u32 = 100;
+
 /// Wait before recording starts, with `RecordStart::Delay`. Long enough
 /// by default to put a guitar back on and be ready; zero turns it off.
 pub const PREROLL_MS_RANGE: RangeInclusive<u32> = 0..=5000;
@@ -127,6 +132,9 @@ pub struct AppConfig {
     /// Applied to the loop only, never the live passthrough.
     #[serde(default = "default_volume_pct")]
     pub volume_pct: u32,
+    /// See `CLICK_VOLUME_PCT_RANGE`.
+    #[serde(default = "default_click_volume_pct")]
+    pub click_volume_pct: u32,
     /// See `RecordStart`.
     #[serde(default)]
     pub record_start: RecordStart,
@@ -238,6 +246,10 @@ fn default_detect_db() -> i32 {
     DEFAULT_DETECT_DB
 }
 
+fn default_click_volume_pct() -> u32 {
+    DEFAULT_CLICK_VOLUME_PCT
+}
+
 fn default_fade_ms() -> u32 {
     DEFAULT_FADE_MS
 }
@@ -292,6 +304,7 @@ impl AppConfig {
     /// window even opened.
     fn clamped(mut self) -> Self {
         self.volume_pct = clamp_to(self.volume_pct, VOLUME_PCT_RANGE);
+        self.click_volume_pct = clamp_to(self.click_volume_pct, CLICK_VOLUME_PCT_RANGE);
         self.preroll_ms = clamp_to(self.preroll_ms, PREROLL_MS_RANGE);
         self.detect_db = clamp_to(self.detect_db, DETECT_DB_RANGE);
         self.fade_ms = clamp_to(self.fade_ms, FADE_MS_RANGE);
@@ -339,6 +352,7 @@ impl Default for AppConfig {
             output_device_name: None,
             input_channel: 0,
             volume_pct: DEFAULT_VOLUME_PCT,
+            click_volume_pct: DEFAULT_CLICK_VOLUME_PCT,
             record_start: RecordStart::Delay,
             preroll_ms: DEFAULT_PREROLL_MS,
             detect_db: DEFAULT_DETECT_DB,
