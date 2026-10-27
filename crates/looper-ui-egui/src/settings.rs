@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
-    LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, VOLUME_PCT_RANGE,
+    DETECT_DB_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, VOLUME_PCT_RANGE,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -180,20 +180,45 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
             .text("Loop volume")
             .suffix("%"),
     );
-    ui.add(
-        egui::Slider::new(&mut settings.config.preroll_ms, PREROLL_MS_RANGE)
-            .step_by(500.0)
-            .text("Record delay")
-            // Shown in seconds, and as "off" rather than "0.0 s" so the
-            // choice reads as deliberate.
-            .custom_formatter(|ms, _| {
-                if ms < 1.0 {
-                    "off".to_owned()
-                } else {
-                    format!("{:.1} s", ms / 1000.0)
-                }
-            }),
-    );
+    // Each start's own setting sits under it, and only shows when that
+    // start is picked: a delay slider beside Detect would look like it
+    // does something.
+    ui.label("Record start");
+    ui.indent("record_start", |ui| {
+        let config = &mut settings.config;
+        ui.radio_value(&mut config.record_start, RecordStart::Instant, "Instant")
+            .on_hover_text("Recording starts as Space goes down");
+        ui.radio_value(&mut config.record_start, RecordStart::Delay, "Delay")
+            .on_hover_text("A countdown first, to get your hands on the guitar");
+        if config.record_start == RecordStart::Delay {
+            ui.add(
+                egui::Slider::new(&mut config.preroll_ms, PREROLL_MS_RANGE)
+                    .step_by(500.0)
+                    .text("Record delay")
+                    // Shown in seconds, and as "off" rather than "0.0 s"
+                    // so the choice reads as deliberate.
+                    .custom_formatter(|ms, _| {
+                        if ms < 1.0 {
+                            "off".to_owned()
+                        } else {
+                            format!("{:.1} s", ms / 1000.0)
+                        }
+                    }),
+            );
+        }
+        ui.radio_value(&mut config.record_start, RecordStart::CountIn, "Count-in")
+            .on_hover_text("A bar of clicks, then recording starts on the bar line");
+        ui.radio_value(&mut config.record_start, RecordStart::Detect, "When you play")
+            .on_hover_text("Recording starts at your first note");
+        if config.record_start == RecordStart::Detect {
+            ui.add(
+                egui::Slider::new(&mut config.detect_db, DETECT_DB_RANGE)
+                    .text("Start level")
+                    .suffix(" dB"),
+            )
+            .on_hover_text("Raise it if noise starts the recording on its own");
+        }
+    });
     ui.add(
         egui::Slider::new(&mut settings.config.long_press_ms, LONG_PRESS_MS_RANGE)
             .step_by(250.0)

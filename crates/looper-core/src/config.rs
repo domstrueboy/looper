@@ -9,10 +9,17 @@ use serde::{Deserialize, Serialize};
 pub const VOLUME_PCT_RANGE: RangeInclusive<u32> = 0..=200;
 pub const DEFAULT_VOLUME_PCT: u32 = 100;
 
-/// Wait before recording starts. Long enough by default to put a guitar
-/// back on and be ready; zero turns it off.
+/// Wait before recording starts, with `RecordStart::Delay`. Long enough
+/// by default to put a guitar back on and be ready; zero turns it off.
 pub const PREROLL_MS_RANGE: RangeInclusive<u32> = 0..=5000;
 pub const DEFAULT_PREROLL_MS: u32 = 4000;
+
+/// How loud the input has to get to start a recording, with
+/// `RecordStart::Detect`, in dB below full scale. Quiet enough for a
+/// clean guitar's first note, loud enough to sit above most noise
+/// floors; a high-gain rig may want it higher.
+pub const DETECT_DB_RANGE: RangeInclusive<i32> = -60..=-10;
+pub const DEFAULT_DETECT_DB: i32 = -40;
 
 /// Headroom between the input and output callbacks, to absorb timing
 /// jitter. The setting to raise when the log complains about underruns -
@@ -116,10 +123,16 @@ pub struct AppConfig {
     /// Applied to the loop only, never the live passthrough.
     #[serde(default = "default_volume_pct")]
     pub volume_pct: u32,
+    /// See `RecordStart`.
+    #[serde(default)]
+    pub record_start: RecordStart,
     /// How long to wait between pressing record and actually capturing,
     /// so there's time to get ready. 0 = start immediately.
     #[serde(default = "default_preroll_ms")]
     pub preroll_ms: u32,
+    /// See `DETECT_DB_RANGE`.
+    #[serde(default = "default_detect_db")]
+    pub detect_db: i32,
     /// See `LATENCY_MS_RANGE`.
     #[serde(default = "default_latency_ms")]
     pub latency_ms: u32,
@@ -141,6 +154,25 @@ pub struct AppConfig {
     /// See `Mode`. Switched from the looper screen, not from Settings.
     #[serde(default)]
     pub mode: Mode,
+}
+
+/// How a first recording starts once Space is pressed. Each is for a
+/// different situation: a count-in is at home and wrong on stage, and
+/// waiting for the first note can't start a part on an off-beat - so
+/// it's a choice, not a fixed way.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordStart {
+    /// The moment Space goes down.
+    Instant,
+    /// After `preroll_ms`, counted down on screen.
+    #[default]
+    Delay,
+    /// After a bar of clicks, on the bar line - the click plays for it
+    /// even with the metronome off.
+    CountIn,
+    /// When the input first crosses `detect_db`, from just before it.
+    Detect,
 }
 
 /// What a config written before this field existed meant: those files
@@ -175,6 +207,10 @@ fn default_long_press_ms() -> u32 {
 
 fn default_metronome_bpm() -> u32 {
     DEFAULT_METRONOME_BPM
+}
+
+fn default_detect_db() -> i32 {
+    DEFAULT_DETECT_DB
 }
 
 impl AppConfig {
@@ -228,6 +264,7 @@ impl AppConfig {
     fn clamped(mut self) -> Self {
         self.volume_pct = clamp_to(self.volume_pct, VOLUME_PCT_RANGE);
         self.preroll_ms = clamp_to(self.preroll_ms, PREROLL_MS_RANGE);
+        self.detect_db = clamp_to(self.detect_db, DETECT_DB_RANGE);
         self.latency_ms = clamp_to(self.latency_ms, LATENCY_MS_RANGE);
         self.max_loop_secs = clamp_to(self.max_loop_secs, MAX_LOOP_SECS_RANGE);
         self.max_layers = clamp_to(self.max_layers, MAX_LAYERS_RANGE);
@@ -272,7 +309,9 @@ impl Default for AppConfig {
             output_device_name: None,
             input_channel: 0,
             volume_pct: DEFAULT_VOLUME_PCT,
+            record_start: RecordStart::Delay,
             preroll_ms: DEFAULT_PREROLL_MS,
+            detect_db: DEFAULT_DETECT_DB,
             latency_ms: DEFAULT_LATENCY_MS,
             max_loop_secs: DEFAULT_MAX_LOOP_SECS,
             max_layers: DEFAULT_MAX_LAYERS,
@@ -312,7 +351,7 @@ pub fn app_dir() -> PathBuf {
     }
 }
 
-fn clamp_to(value: u32, range: RangeInclusive<u32>) -> u32 {
+fn clamp_to<T: Ord + Copy>(value: T, range: RangeInclusive<T>) -> T {
     value.clamp(*range.start(), *range.end())
 }
 

@@ -19,6 +19,14 @@ fn settings() -> AppConfig {
     }
 }
 
+/// A count-in to start the first take, rather than the delay.
+fn counted_in() -> AppConfig {
+    AppConfig {
+        record_start: config::RecordStart::CountIn,
+        ..settings()
+    }
+}
+
 fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -545,8 +553,8 @@ fn the_metronome_is_off_until_asked_for() {
 }
 
 #[test]
-fn the_metronome_counts_in_through_the_pre_roll() {
-    let (mut looper, driver, dir) = start("looper-metronome-arming", &settings());
+fn a_count_in_clicks_from_beat_one() {
+    let (mut looper, driver, dir) = start("looper-metronome-arming", &counted_in());
     looper.toggle_metronome();
     sounds(&driver, 30_000);
 
@@ -610,7 +618,7 @@ const BAR: usize = 88_200;
 /// Recording with the metronome on: through the bar's count-in, then
 /// `frames` into the take, then a press to stop.
 fn record_against_the_click(name: &str, frames: usize) -> (LooperState, MockDriver, PathBuf, Instant) {
-    let (mut looper, driver, dir) = start(name, &settings());
+    let (mut looper, driver, dir) = start(name, &counted_in());
     looper.toggle_metronome();
     let mut at = Instant::now();
     press(&mut looper, at, at);
@@ -696,10 +704,10 @@ fn with_the_metronome_off_a_loop_is_as_long_as_it_was_played() {
 // --- Count-in ---------------------------------------------------------------
 
 #[test]
-fn with_the_metronome_on_a_press_counts_in_one_bar_not_the_record_delay() {
-    // The configured delay is a second; the bar is two.
-    let (mut looper, driver, dir) = start("looper-count-in", &settings());
-    looper.toggle_metronome();
+fn a_count_in_is_one_bar_not_the_record_delay() {
+    // The configured delay is a second; the bar is two. No metronome:
+    // a count-in clicks without it.
+    let (mut looper, driver, dir) = start("looper-count-in", &counted_in());
     let at = Instant::now();
     press(&mut looper, at, at);
     assert_eq!(looper.state(), LoopState::Arming);
@@ -717,17 +725,85 @@ fn with_the_metronome_on_a_press_counts_in_one_bar_not_the_record_delay() {
 }
 
 #[test]
-fn turning_the_metronome_off_calls_a_count_in_off() {
-    let (mut looper, driver, dir) = start("looper-count-in-off", &settings());
+fn turning_the_metronome_off_leaves_a_count_in_counting() {
+    let (mut looper, driver, dir) = start("looper-count-in-off", &counted_in());
     looper.toggle_metronome();
     let at = Instant::now();
     press(&mut looper, at, at);
 
     looper.toggle_metronome();
+    feed(&mut looper, &driver, BAR + 1_000, at);
 
-    assert_eq!(looper.state(), LoopState::Idle);
-    feed(&mut looper, &driver, 2 * BAR, at);
-    assert_eq!(looper.state(), LoopState::Idle, "and nothing starts later");
+    assert_eq!(looper.state(), LoopState::Recording, "on the bar line all the same");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// --- Record start -----------------------------------------------------------
+
+fn starting(record_start: config::RecordStart) -> AppConfig {
+    AppConfig {
+        record_start,
+        ..settings()
+    }
+}
+
+#[test]
+fn instant_records_as_space_goes_down() {
+    // A record delay is set, and ignored.
+    let (mut looper, _driver, dir) = start("looper-start-instant", &starting(config::RecordStart::Instant));
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Recording);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn with_the_metronome_on_a_delay_is_still_a_delay() {
+    // No longer turned into a count-in: that's a setting of its own.
+    let (mut looper, _driver, dir) = start("looper-start-delay-click", &settings());
+    looper.toggle_metronome();
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64));
+
+    assert_eq!(looper.state(), LoopState::Recording, "when the delay runs out");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn detect_waits_for_the_first_note() {
+    let (mut looper, driver, dir) = start("looper-start-detect", &starting(config::RecordStart::Detect));
+    let at = Instant::now();
+    press(&mut looper, at, at);
+    assert!(looper.is_waiting_to_hear());
+
+    // However long it's quiet for.
+    for _ in 0..20 {
+        driver.cycle(&vec![0.0; 4_096]);
+        looper.tick(false, at + Duration::from_secs(10));
+    }
+    assert_eq!(looper.state(), LoopState::Arming);
+
+    feed(&mut looper, &driver, 4_096, at);
+
+    assert_eq!(looper.state(), LoopState::Recording);
+    assert!(!looper.is_waiting_to_hear());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_press_calls_off_waiting_for_the_first_note() {
+    let (mut looper, driver, dir) = start("looper-start-detect-off", &starting(config::RecordStart::Detect));
+    let mut at = Instant::now();
+    press(&mut looper, at, at);
+
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_096, at);
+
+    assert_eq!(looper.state(), LoopState::Idle, "and playing doesn't start it");
+    assert_eq!(looper.loop_duration_and_progress().0, 0.0);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -8,7 +8,9 @@ fn saved() -> AppConfig {
         output_device_name: None,
         input_channel: 1,
         volume_pct: 140,
+        record_start: RecordStart::Detect,
         preroll_ms: 2_500,
+        detect_db: -33,
         latency_ms: 12,
         max_loop_secs: 90,
         max_layers: 6,
@@ -28,7 +30,9 @@ fn a_round_trip_keeps_every_setting() {
     assert_eq!(read.sample_rate, 48_000);
     assert_eq!(read.input_channel, 1);
     assert_eq!(read.volume_pct, 140);
+    assert_eq!(read.record_start, RecordStart::Detect);
     assert_eq!(read.preroll_ms, 2_500);
+    assert_eq!(read.detect_db, -33);
     assert_eq!(read.latency_ms, 12);
     assert_eq!(read.max_loop_secs, 90);
     assert_eq!(read.max_layers, 6);
@@ -56,7 +60,9 @@ fn settings_added_later_fall_back_to_their_defaults() {
 
     assert_eq!(config.input_channel, 0);
     assert_eq!(config.volume_pct, DEFAULT_VOLUME_PCT);
+    assert_eq!(config.record_start, RecordStart::Delay, "what a press always did");
     assert_eq!(config.preroll_ms, DEFAULT_PREROLL_MS);
+    assert_eq!(config.detect_db, DEFAULT_DETECT_DB);
     assert_eq!(config.latency_ms, DEFAULT_LATENCY_MS);
     assert_eq!(config.max_loop_secs, DEFAULT_MAX_LOOP_SECS);
     assert_eq!(config.max_layers, DEFAULT_MAX_LAYERS);

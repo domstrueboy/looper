@@ -348,7 +348,7 @@ How the main control behaves, as settings rather than one fixed way.
   layer at 60 s). Silent passes are kept for now - Hold Space removes
   them; auto-dropping needs a threshold a noisy high-gain signal won't
   fool.
-- **7c. Record start mode.** One setting: *Instant*, *Delay* (today's
+- **7c. Record start mode - done.** One setting: *Instant*, *Delay* (today's
   Record delay), *Count-in* (today's, one bar) or *Detect* - recording
   opens when the input crosses a level, so you don't have to press and
   play at once. Replaces the implicit "metronome on means count-in": a
@@ -374,7 +374,32 @@ How the main control behaves, as settings rather than one fixed way.
   scheduler's `Pattern` already has a bar length; the bar rounding,
   the count-in and tempo-from-the-loop all have to follow it.
 
-### 9. Drum machine - extended
+### 9. Review - plan and implementation
+
+A full stop before the drum machine, which is the biggest addition yet:
+step 7 reworked the controls three times, and the drums build on the
+scheduler, the tempo and the press logic as they stand. Two passes, then
+the fixes they turn up as sub-steps (9a, 9b, ...) before step 10.
+
+**Plan.** Re-read this file top to bottom against what's built: drop or
+merge stale items, re-order *Later*, settle the open decisions, and check
+steps 10-11 still fit "run and play".
+
+**Implementation.**
+
+| Area | What to check |
+|---|---|
+| Real time | Everything the callback reaches: no allocation, lock, I/O or unbounded loop - the per-pass split loop included |
+| Boundaries | `egui` only in app/ui, `cpal` only in hal, the UI a leaf, HAL with no looping |
+| Press logic | `looper.rs` grew press, double, hold, stop, `pressed_from`, `undo_pending` - likely its own module, with one table-driven test over every mode x state x gesture |
+| Thread contract | Every `SharedControl` request (clear, remove, redo, abandon, next layer) and the order the callback reads them in, written down in one place |
+| Dead code | Paths nothing reaches any more - e.g. the stack's "remove the only layer" stash, `can_stop` beside `can_stop_or_clear` |
+| Tests | Gaps, duplicated helpers, anything slow or timing-sensitive |
+| Docs | README and the user guide against the app as it behaves; the screenshot |
+| Hygiene | `cargo fmt` clean repo-wide (it isn't), the clippy `as_chunks` warning, line endings (`.gitattributes`) |
+| Memory | 8 layers x 120 s, held twice - what Settings says against what's allocated |
+
+### 10. Drum machine - extended
 
 Preset grooves, not a step editor: each drum style is a 4x4 grid of
 ready-made grooves, **variation** across and **strength** up, and you
@@ -391,7 +416,7 @@ never loaded in the callback; embed one small CC0 kit via
 folder next to the config for more. The drums follow the loop's tempo,
 which is what step 6 was for. A drum level control beside 8b's.
 
-### 10. Mic channel - extended
+### 11. Mic channel - extended
 
 The second input as a track of its own, with independent record-enable,
 mute and level, once the track abstraction (v1 step 2) is in place. Nothing

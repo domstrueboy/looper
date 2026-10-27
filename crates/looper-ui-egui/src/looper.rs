@@ -41,6 +41,7 @@ fn readout(looper: &LooperState) -> indicator::Readout {
         arming_fraction: looper.preroll_progress(),
         finishing_bar: looper.is_finishing_bar(),
         dubs_on: looper.dubs_on(),
+        waiting_to_hear: looper.is_waiting_to_hear(),
     }
 }
 

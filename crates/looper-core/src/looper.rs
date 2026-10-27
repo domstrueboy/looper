@@ -10,7 +10,7 @@ use crate::audio::fault::StreamFault;
 use crate::audio::scheduler::{Pattern, Scheduler};
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
-use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode, RecordMode};
+use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
@@ -58,10 +58,10 @@ pub struct LooperState {
     /// frames recorded. The audio thread rounds the take to the bar
     /// either way; this only makes sure there's a bar's worth to round.
     stop_at: Option<usize>,
-    /// When a count-in began - set instead of `preroll` while the
-    /// metronome is on. Only for showing it: the take opens on the audio
-    /// thread at the bar line, and this side follows.
-    count_in: Option<Instant>,
+    /// A first take the audio thread opens rather than this side - on a
+    /// count-in's bar line, or at the first note heard. Only for showing
+    /// it: this side follows once the take is seen growing.
+    audio_start: Option<AudioStart>,
     /// The state the last single press acted from. A double press is two
     /// presses with the first already acted on, so it needs to know what
     /// that first one changed to take it back.
@@ -111,6 +111,14 @@ pub struct LooperState {
     undo_pending: bool,
     /// Holding it is what keeps the audio running; dropping it stops.
     _stream: Box<dyn AudioStream>,
+}
+
+/// See `LooperState::audio_start`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AudioStart {
+    /// When it began, for the countdown.
+    CountIn(Instant),
+    Detect,
 }
 
 impl LooperState {
@@ -164,7 +172,7 @@ impl LooperState {
             stop_button_held: false,
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             stop_at: None,
-            count_in: None,
+            audio_start: None,
             pressed_from: None,
             loop_tempo: None,
             // A saved loop has a length but no tempo yet; guessed once
@@ -276,7 +284,7 @@ impl LooperState {
             LoopState::Arming => {
                 self.state_machine.press();
                 self.preroll.cancel();
-                self.count_in = None;
+                self.audio_start = None;
             }
             LoopState::Overdubbing if self.config.record_mode == RecordMode::RecDub => {
                 self.state_machine.toggle_overdub();
@@ -342,15 +350,11 @@ impl LooperState {
     }
 
     /// Off at every start: a click nobody asked for, the moment the app
-    /// opens, is worse than pressing M. Turning it off mid count-in calls
-    /// the count-in off - there'd be no bar line left to start on.
+    /// opens, is worse than pressing M. A count-in clicks regardless, so
+    /// turning it off mid count-in leaves the count-in be.
     pub fn toggle_metronome(&mut self) {
         self.metronome_on = !self.metronome_on;
         self.control.publish_metronome_on(self.metronome_on);
-        if !self.metronome_on && self.count_in.take().is_some() {
-            self.state_machine.press();
-            self.control.publish_state(self.state_machine.state());
-        }
     }
 
     pub fn is_layer_muted(&self, index: usize) -> bool {
@@ -509,18 +513,26 @@ impl LooperState {
     /// Seconds left of the pre-roll countdown, or 0.0 when one isn't
     /// running.
     pub fn preroll_remaining_secs(&self) -> f32 {
-        match self.count_in {
-            Some(start) => (self.bar_secs() - self.secs_since(start)).max(0.0),
+        match self.audio_start {
+            Some(AudioStart::CountIn(start)) => (self.bar_secs() - self.secs_since(start)).max(0.0),
+            Some(AudioStart::Detect) => 0.0,
             None => self.preroll.remaining_secs(self.now),
         }
     }
 
     /// How far through the pre-roll the countdown has got, 0.0-1.0.
     pub fn preroll_progress(&self) -> f32 {
-        match self.count_in {
-            Some(start) => (self.secs_since(start) / self.bar_secs()).min(1.0),
+        match self.audio_start {
+            Some(AudioStart::CountIn(start)) => (self.secs_since(start) / self.bar_secs()).min(1.0),
+            Some(AudioStart::Detect) => 0.0,
             None => self.preroll.progress(self.now),
         }
+    }
+
+    /// Armed and waiting for the first note rather than counting down -
+    /// there's no time left to show, only that it's listening.
+    pub fn is_waiting_to_hear(&self) -> bool {
+        self.audio_start == Some(AudioStart::Detect)
     }
 
     fn secs_since(&self, start: Instant) -> f32 {
@@ -567,10 +579,11 @@ impl LooperState {
             self.control.publish_state(self.state_machine.state());
         }
 
-        // The audio thread opens a count-in's take on the bar line; the
-        // take growing is the sign it has.
-        if self.count_in.is_some() && self.control.loop_len() > 0 {
-            self.count_in = None;
+        // The audio thread opens a count-in's take on the bar line, and
+        // a detected one at the first note; the take growing is the sign
+        // it has.
+        if self.audio_start.is_some() && self.control.loop_len() > 0 {
+            self.audio_start = None;
             self.state_machine.finish_arming();
             self.control.publish_state(self.state_machine.state());
         }
@@ -668,14 +681,19 @@ impl LooperState {
         }
         self.stop_at = None;
         match self.state() {
-            // A pre-roll is only for the first recording - once a loop
-            // is playing you're already in time with it. With the
-            // metronome on it's a bar's count-in instead of the delay.
-            LoopState::Idle if self.metronome_on => {
+            // Only for the first recording - once a loop is playing
+            // you're already in time with it.
+            LoopState::Idle if self.config.record_start == RecordStart::CountIn => {
                 self.state_machine.arm();
-                self.count_in = Some(now);
+                self.audio_start = Some(AudioStart::CountIn(now));
             }
-            LoopState::Idle if self.preroll.is_enabled() => {
+            LoopState::Idle if self.config.record_start == RecordStart::Detect => {
+                self.state_machine.arm();
+                self.audio_start = Some(AudioStart::Detect);
+            }
+            LoopState::Idle
+                if self.config.record_start == RecordStart::Delay && self.preroll.is_enabled() =>
+            {
                 self.state_machine.arm();
                 self.preroll.start(now);
             }
@@ -692,12 +710,11 @@ impl LooperState {
                 return self.control.request_next_layer();
             }
             LoopState::Overdubbing => self.state_machine.toggle_overdub(),
-            // Records with no delay, calls a count-in off, plays a
-            // stopped loop.
+            // Records at once, calls a wait off, plays a stopped loop.
             LoopState::Idle | LoopState::Arming | LoopState::Stopped => {
                 self.state_machine.press();
                 self.preroll.cancel();
-                self.count_in = None;
+                self.audio_start = None;
             }
         }
         self.control.publish_state(self.state_machine.state());
@@ -812,7 +829,7 @@ impl LooperState {
     fn clear(&mut self) {
         self.undo_pending = false;
         self.stop_at = None;
-        self.count_in = None;
+        self.audio_start = None;
         self.loop_tempo = None;
         self.tempo_pending = None;
         self.state_machine.clear();

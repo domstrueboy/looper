@@ -354,13 +354,22 @@ the OS's key-repeat events.
 
 
 
-### Pre-roll
+### Record start
 
-With a **record delay** set in Settings (4s by default), the flow goes
-through **Arming** instead: a bar fills as the wait runs out, then
-Recording. It's for the first recording only - once a loop is playing
-you're already in time with it - and a press part-way through calls it
-off, back to Idle.
+`record_start` picks how a first take opens. Every one but `instant`
+goes through **Arming** first; it's for the first recording only - once
+a loop is playing you're already in time with it - and a press or Stop
+part-way through calls it off, back to Idle.
+
+| `record_start` | Arming ends | Timed on |
+|---|---|---|
+| `instant` | - (straight to Recording) | - |
+| `delay` (default) | after `preroll_ms`, a bar filling as it runs | the UI thread |
+| `count_in` | on the bar line after one bar of clicks | the audio thread |
+| `detect` | at the first sample reaching `detect_db`, opened 10 ms before it | the audio thread |
+
+It replaces "metronome on means count-in": a count-in is at home and
+wrong on stage, and the metronome is a separate thing to want.
 
 The countdown runs on the UI thread, which already ticks every frame and
 already works in `Instant`: the callback keeps nothing until the state
@@ -368,12 +377,15 @@ flips to `Recording`. Input is handled before the countdown each frame,
 so a press meant to cancel wins over the countdown happening to run out
 on the same frame.
 
-With the metronome on, `Arming` is a one-bar **count-in** instead, and
-the roles reverse: the *audio thread* opens the take, on the bar line,
-to the frame - mid-block if that's where it falls - and the UI thread
-moves to `Recording` when it sees the take growing. A UI frame would
-land the start up to ~20 ms late, and the whole loop would sit that far
-off the click for good. Three things make it work:
+For a **count-in** and **detect** the roles reverse: the *audio
+thread* opens the take, to the frame - mid-block if that's where the bar
+line or the note falls - and the UI thread moves to `Recording` when it
+sees the take growing (`audio_start`). A UI frame would land the start
+up to ~20 ms late: the whole loop would sit that far off the click for
+good, or clip the attack of the first note. The count-in clicks with the
+metronome off too; detect keeps the last 10 ms of input round and round
+(`Detector`), since a pick's attack climbs to the level it's caught at.
+Three things make it work:
 
 - The input feeds the recorder ring through `Arming` too, and the
   output drains it, so the ring is already flowing at the line rather
@@ -381,7 +393,7 @@ off the click for good. Three things make it work:
 - The UI thread's copy is fed by the *output* path, with exactly what
   the stack recorded, and told by it where each take ended - see "Why a
   second copy exists".
-- A count-in cancelled after its take opened arrives as `Arming` ->
+- A count-in or detect cancelled after its take opened arrives as `Arming` ->
   `Idle` with a take open; the stack drops it and reports it dropped.
 
 ### Layers
@@ -566,7 +578,9 @@ window opened.
 | Setting | Default | Range | Effect |
 |---|---|---|---|
 | `volume_pct` | 100 | 0-200 | loop playback gain, live signal untouched |
-| `preroll_ms` | 4000 | 0-5000 | wait before recording starts; 0 = off |
+| `record_start` | `"delay"` | `"instant"`, `"delay"`, `"count_in"`, `"detect"` | how a first take opens - see "Record start" |
+| `preroll_ms` | 4000 | 0-5000 | the wait, with `delay`; 0 = none |
+| `detect_db` | -40 | -60 to -10 | the level that opens a take, with `detect` |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold is: Space to undo, S to clear |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
 | `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"`, `"rec_dub_per_pass"` | see "State machine"; the older `after_take = "play"/"dub"` still reads |

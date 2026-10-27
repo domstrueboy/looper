@@ -211,20 +211,20 @@ fn the_mirror_is_fed_exactly_what_the_stack_records() {
     assert_eq!(mirrored[..m], expected);
 }
 
-/// With the metronome on, a pre-roll is a bar's count-in, and the take
-/// opens on the bar line to the sample - here mid-block, where the UI
-/// thread's frame clock would have landed it anywhere.
+/// A count-in opens the take on the bar line to the sample - here
+/// mid-block, where the UI thread's frame clock would have landed it
+/// anywhere. With the metronome off: the count-in clicks regardless.
 #[test]
 fn a_count_in_opens_the_take_on_the_bar_line() {
     // 130 BPM at 1 kHz: a bar of 1,846.15 frames, so the line falls at
     // frame 1,846 - half way through a four-frame block.
     let settings = AppConfig {
         metronome_bpm: 130,
+        record_start: RecordStart::CountIn,
         ..test_settings()
     };
     let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
-    control.publish_metronome_on(true);
 
     control.publish_state(LoopState::Arming);
     let mut next = 1.0;
@@ -241,9 +241,9 @@ fn a_count_in_opens_the_take_on_the_bar_line() {
 }
 
 #[test]
-fn without_the_metronome_a_pre_roll_records_nothing() {
-    // The plain pre-roll is timed on the UI thread, which publishes
-    // Recording itself when it runs out.
+fn a_delay_records_nothing_while_it_runs() {
+    // Timed on the UI thread, which publishes Recording itself when it
+    // runs out - the metronome being on changes nothing.
     let settings = test_settings();
     let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
@@ -311,10 +311,12 @@ fn the_input_and_output_channel_counts_are_independent() {
 fn a_count_in_called_off_after_its_take_opened_leaves_no_loop() {
     // The take opens here on the bar line; a cancel published before the
     // UI thread saw it arrives as Arming -> Idle with the take open.
-    let settings = test_settings();
+    let settings = AppConfig {
+        record_start: RecordStart::CountIn,
+        ..test_settings()
+    };
     let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
-    control.publish_metronome_on(true);
     control.publish_state(LoopState::Arming);
     let mut next = 1.0;
     for _ in 0..(2_000 + 40) / BLOCK {
@@ -613,3 +615,64 @@ fn without_a_layer_per_pass_a_dub_runs_on_into_the_next_pass() {
 
     assert_eq!(path.output.stack.layer_count(), 2, "one layer, however many passes");
 }
+
+// --- Detect -----------------------------------------------------------------
+
+/// A path listening for the first note at -20 dB - 0.1 - with the 10 ms
+/// look-back that is 10 samples at 1 kHz.
+fn detecting() -> (Arc<SharedControl>, AudioPath, Capture) {
+    let settings = AppConfig {
+        record_start: RecordStart::Detect,
+        detect_db: -20,
+        ..test_settings()
+    };
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (path, captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    control.publish_state(LoopState::Arming);
+    (control, path, captured)
+}
+
+/// Quiet input, every sample telling which it was: 0.001 x its number.
+fn quiet(from: usize, len: usize) -> Vec<f32> {
+    (from..from + len).map(|k| k as f32 * 0.001).collect()
+}
+
+#[test]
+fn detect_opens_the_take_just_before_the_first_note() {
+    // The note lands on a block's first sample, so the whole look-back
+    // comes from the blocks before - round the end of its buffer.
+    let (_control, mut path, mut captured) = detecting();
+    for block in 0..20 {
+        drive(&mut path, &quiet(1 + block * BLOCK, BLOCK));
+    }
+    assert_eq!(path.output.stack.recorded_len(), 0, "nothing loud enough yet");
+    for _ in 0..5 {
+        drive(&mut path, &[0.5; BLOCK]);
+    }
+
+    // The monitoring delay holds quiet and loud back alike, so the take
+    // opens on the last ten quiet samples played: 71..=80.
+    let mut first = [0.0f32; 11];
+    captured.samples.pop_slice(&mut first);
+    let mut expected = quiet(71, 10);
+    expected.push(0.5);
+    assert_eq!(first[..], expected[..]);
+}
+
+#[test]
+fn a_note_deep_in_a_block_takes_its_look_back_from_the_block() {
+    let (_control, mut path, mut captured) = detecting();
+    let mut block = quiet(1, 24);
+    block[20..].fill(0.5);
+    drive(&mut path, &block);
+    drive(&mut path, &[0.5; 24]);
+
+    // Found 20 samples into what the recorder read: the ten before it
+    // are in the same block.
+    let mut first = [0.0f32; 11];
+    captured.samples.pop_slice(&mut first);
+    let mut expected = quiet(11, 10);
+    expected.push(0.5);
+    assert_eq!(first[..], expected[..]);
+}
+

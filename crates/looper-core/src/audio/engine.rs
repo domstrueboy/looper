@@ -16,7 +16,7 @@ use ringbuf::{
 use super::loop_stack::{LoopStack, OpenTake};
 use super::metronome::Metronome;
 use super::shared_control::SharedControl;
-use crate::config::{AppConfig, RecordMode};
+use crate::config::{AppConfig, RecordMode, RecordStart};
 use crate::loop_mirror::{Capture, TakeEnd};
 use crate::state_machine::LoopState;
 
@@ -36,6 +36,10 @@ const CAPTURE_BUFFER_SECONDS: usize = 2;
 
 /// Take ends the UI thread's copy can fall behind by.
 const TAKE_ENDS_CAPACITY: usize = 64;
+
+/// How far before the detect level is crossed a detected take opens: a
+/// pick's attack takes a few milliseconds to climb to it.
+const DETECT_LOOKBACK_MS: usize = 10;
 
 /// Holds the recorded signal back to where the monitored one is.
 ///
@@ -159,6 +163,11 @@ pub struct OutputPath {
     /// covered the loop, and the next opens on the following sample.
     /// Fixed for the stream's life - a settings change rebuilds it.
     layer_per_pass: bool,
+    /// How a first take opens. Count-in and Detect open it here, to the
+    /// sample; Instant and Delay are timed on the UI thread, which
+    /// publishes Recording itself.
+    record_start: RecordStart,
+    detector: Detector,
     metronome: Metronome,
     /// The callback only ever sees the published state, never the
     /// transitions, so layer bookkeeping keys off this changing - see
@@ -230,6 +239,9 @@ impl OutputPath {
                 if state == LoopState::Arming || (state == LoopState::Recording && !take_open) {
                     self.metronome.restart();
                 }
+                if state == LoopState::Arming {
+                    self.detector.reset();
+                }
                 self.previous_state = state;
             }
 
@@ -267,18 +279,29 @@ impl OutputPath {
                     let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
                     let keep_from = if self.stack.is_recording() {
                         Some(0)
-                    } else if self.control.metronome_on() {
-                        // The count-in's bar line: the take opens on it,
-                        // to the frame, and what came before is dropped.
-                        let line = self.metronome.frames_to_bar_line().filter(|&at| at < frames);
-                        if line.is_some() {
-                            self.stack.begin_first_layer();
-                        }
-                        line
                     } else {
-                        None
+                        match self.record_start {
+                            // The count-in's bar line: the take opens on
+                            // it, to the frame, and what came before is
+                            // dropped.
+                            RecordStart::CountIn => {
+                                self.metronome.frames_to_bar_line().filter(|&at| at < frames)
+                            }
+                            RecordStart::Detect => self.detector.find(&self.recorded[..n]),
+                            RecordStart::Instant | RecordStart::Delay => None,
+                        }
                     };
                     if let Some(from) = keep_from {
+                        if !self.stack.is_recording() {
+                            self.stack.begin_first_layer();
+                            if self.record_start == RecordStart::Detect {
+                                for part in self.detector.before() {
+                                    self.stack.record_first_layer(part);
+                                    self.take_samples +=
+                                        pass_on(&mut self.capture, &self.control, part);
+                                }
+                            }
+                        }
                         let take = &self.recorded[from.min(n)..n];
                         self.stack.record_first_layer(take);
                         self.take_samples += pass_on(&mut self.capture, &self.control, take);
@@ -324,7 +347,11 @@ impl OutputPath {
 
             // Onto the mix, after the loop volume: the click is level
             // with the loop, not scaled by it.
-            if self.control.metronome_on() {
+            // A count-in clicks with the metronome off too - a bar of
+            // silence would count nobody in.
+            let counting_in =
+                state == LoopState::Arming && self.record_start == RecordStart::CountIn;
+            if self.control.metronome_on() || counting_in {
                 if matches!(state, LoopState::Looping | LoopState::Overdubbing) {
                     self.metronome
                         .add_on_loop(dry, loop_pos, self.stack.recorded_len());
@@ -363,6 +390,67 @@ fn take_end(stack: &LoopStack, ended: OpenTake, samples: usize, dropped: bool) -
         TakeEnd::Overdub {
             samples,
             start: ended.start,
+        }
+    }
+}
+
+/// `RecordStart::Detect`: finds where the input first reaches a level,
+/// keeping what came just before. A note's attack starts below the level
+/// it's caught at, so the take opens `DETECT_LOOKBACK_MS` back.
+struct Detector {
+    level: f32,
+    /// The latest input, round and round; `filled` counts what's real
+    /// since the last reset.
+    lookback: Vec<f32>,
+    pos: usize,
+    filled: usize,
+    /// How much of the look-back the take last found opens with.
+    wanted: usize,
+}
+
+impl Detector {
+    fn new(level: f32, lookback: usize) -> Self {
+        Self {
+            level,
+            lookback: vec![0.0; lookback],
+            pos: 0,
+            filled: 0,
+            wanted: 0,
+        }
+    }
+
+    /// Forgets the look-back, so input from before Arming isn't kept.
+    fn reset(&mut self) {
+        self.filled = 0;
+    }
+
+    /// Where in `block` a take reaching the level opens - the look-back
+    /// before the crossing, as far as the block holds it - or `None`,
+    /// keeping the block as look-back for the next.
+    fn find(&mut self, block: &[f32]) -> Option<usize> {
+        let len = self.lookback.len();
+        let Some(at) = block.iter().position(|sample| sample.abs() >= self.level) else {
+            for &sample in block {
+                self.lookback[self.pos] = sample;
+                self.pos = (self.pos + 1) % len;
+            }
+            self.filled = (self.filled + block.len()).min(len);
+            return None;
+        };
+        self.wanted = len.saturating_sub(at).min(self.filled);
+        Some(at.saturating_sub(len))
+    }
+
+    /// The rest of the look-back the take last found opens with, from
+    /// the blocks before its own, oldest first.
+    fn before(&self) -> [&[f32]; 2] {
+        let len = self.lookback.len();
+        let wanted = self.wanted;
+        let start = (self.pos + len - wanted) % len;
+        if start + wanted <= len {
+            [&self.lookback[start..start + wanted], &[]]
+        } else {
+            [&self.lookback[start..], &self.lookback[..start + wanted - len]]
         }
     }
 }
@@ -480,6 +568,11 @@ pub fn build_audio_path(
             take_samples: 0,
             stack,
             layer_per_pass: settings.record_mode == RecordMode::RecDubPerPass,
+            record_start: settings.record_start,
+            detector: Detector::new(
+                10f32.powf(settings.detect_db as f32 / 20.0),
+                (sample_rate as usize * DETECT_LOOKBACK_MS / 1_000).max(1),
+            ),
             metronome: Metronome::new(sample_rate, settings.metronome_bpm),
             previous_state: LoopState::Idle,
         },

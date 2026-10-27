@@ -28,11 +28,18 @@ The first time you launch the app, you'll see a **Settings** screen:
    matter that it came from a single input.
 5. **Loop volume** - how loud the loop plays back relative to your live
    signal
-6. **Record delay** - how long to wait after you hit record before it
-   actually starts capturing, so you have time to get your hands back on
-   the guitar. Defaults to **4 seconds**; drag it down to **off** if
-   you'd rather it start immediately. With the metronome on, a one-bar
-   count-in takes its place.
+6. **Record start** - how the first recording begins once you press
+   Space:
+   - **Instant** - right away.
+   - **Delay** (the default) - after a countdown, so you have time to get
+     your hands back on the guitar. **Record delay** sets how long: **4
+     seconds** by default.
+   - **Count-in** - after one bar of clicks, starting exactly on the next
+     beat one. It clicks even with the metronome off.
+   - **When you play** - the moment you start playing, from just before
+     your first note so its attack isn't cut. **Start level** sets how
+     loud that note has to be; raise it if noise starts the recording on
+     its own.
 7. **Hold to undo / clear** - how long Space or S has to be held
    down: Space undoes the last layer, S wipes the loop. Two seconds by
    default.
@@ -87,11 +94,12 @@ playing - the loop just plays back on top of it.
 The colored dot shows what's happening:
 
 - **Gray** - Empty, nothing recorded
-- **Blue** (pulsing) - Get ready: waiting out the record delay before
-  recording starts. The seconds left count down where the recording
-  time normally shows, with a light gray bar filling beneath it -
-  recording begins when the bar is full. The button shows **✖**: press
-  it to call the whole thing off.
+- **Blue** (pulsing) - Get ready: waiting out the record delay or the
+  count-in before recording starts. The seconds left count down where
+  the recording time normally shows, with a light gray bar filling
+  beneath it - recording begins when the bar is full. With **When you
+  play** it says **Play to start** instead, and waits as long as you
+  like. The button shows **✖**: press it to call the whole thing off.
 - **Red** (pulsing) - Recording, with elapsed time shown
 - **Green** - Looping, with the loop's length and a progress bar showing
   where in the loop you currently are
@@ -167,10 +175,9 @@ the app remembers it. The **Metronome** slider in Settings sets the same
 tempo.
 
 - With no loop, it simply clicks along at the tempo.
-- Press record and it counts you in: **one bar** of clicks, then
-  recording starts exactly on the next beat one. This replaces the
-  **Record delay** while the metronome is on. Turning the metronome off
-  during the count-in calls it off.
+- For a count-in before the first recording, set **Record start** to
+  **Count-in**: **one bar** of clicks, then recording starts exactly on
+  the next beat one.
 - When recording starts, the click starts over, so the loop begins on a
   beat. While the loop plays, the click starts over at the top of the
   loop each time round.

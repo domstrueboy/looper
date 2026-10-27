@@ -19,6 +19,8 @@ pub struct Readout {
     /// A press while dubbing keeps the layer and dubs the next, rather
     /// than plays.
     pub dubs_on: bool,
+    /// Armed and listening for the first note, with no countdown.
+    pub waiting_to_hear: bool,
 }
 
 /// Label for the main button: what a short press does next, or what the
@@ -48,6 +50,9 @@ pub fn press_button_label(readout: &Readout, long_press_active: bool) -> &'stati
 pub fn state_indicator(ui: &mut egui::Ui, readout: &Readout) {
     let (color, label) = match readout.state {
         LoopState::Idle => (egui::Color32::GRAY, "Empty"),
+        LoopState::Arming if readout.waiting_to_hear => {
+            (egui::Color32::from_rgb(60, 140, 255), "Play to start")
+        }
         LoopState::Arming => (egui::Color32::from_rgb(60, 140, 255), "Get ready"),
         // Says why a press that should have stopped it hasn't, yet.
         LoopState::Recording if readout.finishing_bar => {
@@ -81,6 +86,8 @@ pub fn state_indicator(ui: &mut egui::Ui, readout: &Readout) {
 
     match readout.state {
         LoopState::Idle => {}
+        // No time to count down: it starts when you do.
+        LoopState::Arming if readout.waiting_to_hear => {}
         LoopState::Arming => {
             // Laid out exactly like the states below: the time as a
             // label where the recording and loop times appear, the bar
