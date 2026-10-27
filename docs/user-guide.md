@@ -47,9 +47,13 @@ The first time you launch the app, you'll see a **Settings** screen:
 7. **Hold to undo / clear** - how long Space or S has to be held
    down: Space undoes the last layer, S wipes the loop. Two seconds by
    default.
-8. **Latency** - how much headroom the audio engine keeps. Lower feels
+8. **Metronome** and **Time signature** - the click's tempo, 120 BPM by
+   default, and its bar. See *Metronome* below.
+9. **Record mode** - what Space does once the first take is down. See
+   *Record mode* below.
+10. **Latency** - how much headroom the audio engine keeps. Lower feels
    more immediate; if the sound crackles or drops out, raise it.
-9. **Max loop length** and **Max layers** - the longest loop you can
+11. **Max loop length** and **Max layers** - the longest loop you can
    record and how many layers you can stack. Both are reserved in
    memory up front, so the line underneath tells you what your choices
    will cost - there's no reason to ask for more than you'll use.
@@ -70,10 +74,11 @@ Delete it to start over from the Settings screen.
 
 ## Using the looper
 
-![The looper screen, playing back a recorded loop](looper-screen.png)
+![The looper screen in Extended, playing back a loop of three layers](looper-screen.png)
 
-*Mid-loop: one layer recorded, the bar showing where in the loop
-playback is.*
+*Mid-loop in Extended: three layers of four, the bar showing where in
+the loop playback is, and the tempo taken from the loop - so the
+buttons beside it halve and double it.*
 
 The main control is the **spacebar** or the on-screen round button -
 they're fully interchangeable. It never stops the loop; that's **Stop**.
@@ -81,9 +86,9 @@ they're fully interchangeable. It never stops the loop; that's **Stop**.
 | Control | What happens |
 |---|---|
 | **Space** | Record, then play and dub in turn - see **Record mode** below. On a stopped loop, play |
-| **S** (or **Stop**) | Stop. A take or a layer in progress is kept; a record delay or count-in is called off |
+| **S** (or **Stop**) | Stop. A take or a layer in progress is kept; a record delay, a count-in or the wait for your first note is called off |
 | **Space twice quickly** | The same as S - for when you only have one key or pedal |
-| **Hold Space** | Undo the last layer - hold again for the one before. Held while dubbing, it undoes the layer you're recording. Never the first recording |
+| **Hold Space** | Undo the last layer - hold again for the one before. Held while dubbing, it undoes the layer you're recording; held while recording the first take, it throws the take away. A finished first recording is never undone - that's a clear |
 | **Hold S** (or **Stop**) | Clear the loop, from any state - back to empty |
 
 A hold is two seconds by default (**Hold to undo / clear** in Settings);
@@ -304,6 +309,7 @@ Two messages can appear at the top of the looper screen:
 
 ## Not yet supported
 
-This is an early, minimal version. Not (yet) included: trimming the
-start/end of a loop, amp modeling (NAM),
-saving loops to a file, or loops that snap to the metronome's bars.
+This is an early version. Not (yet) included: a tuner, more than one
+saved loop, a drum machine, a mic channel, effects, trimming the
+start/end of a loop, amp modeling (NAM), or exporting the mix as one
+file.

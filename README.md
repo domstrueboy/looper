@@ -141,34 +141,40 @@ between the two ends - see "Recording alignment".
 
 ## Module layout
 
-Solid arrows are plain calls. Thick arrows cross a thread boundary, and
-only ever through atomics or a ring buffer.
+Solid arrows are plain calls. Thick arrows cross a thread boundary: to
+and from the audio callbacks only ever through atomics or a ring buffer,
+to the loop writer through a queue.
 
 ```mermaid
 flowchart TB
     GUITAR(["guitar - audio in"])
     SPEAKERS(["audio out"])
+    DISK(["loop WAVs, tempo"])
 
     subgraph UITHREAD["UI thread - one frame at a time"]
         direction TB
         subgraph FW["looper-app + looper-ui-egui - the only egui"]
             MAIN["main.rs<br/>window, frame loop, tick"]
+            APP["app.rs<br/>which screen is up, applying actions"]
             UIL["ui-egui/looper.rs"]
             UIS["ui-egui/settings.rs"]
             UII["ui-egui/indicator.rs"]
         end
         subgraph MODEL["looper-core - plain data, no egui, no cpal"]
-            APP["app.rs<br/>which screen is up"]
             LOOPER["looper.rs<br/>looper-screen state"]
+            PEDAL["looper/pedal.rs<br/>press, double, hold, stop"]
             SET["settings.rs"]
             SM["state_machine.rs"]
             PR["preroll.rs"]
             INPUT["input.rs"]
+            TEMPO["tempo.rs, tap_tempo.rs"]
             MIRROR["loop_mirror.rs"]
             CFG["config.rs"]
             WAV["wav.rs"]
         end
     end
+
+    WRITER["loop_writer.rs<br/>its own thread"]
 
     SHARED(["SharedControl<br/>atomics only"])
     CAPTURE(["capture ring"])
@@ -179,6 +185,7 @@ flowchart TB
         BRIDGE(["passthrough ring<br/>recorder ring"])
         OUTPATH["OutputPath<br/>monitor plus loop, overdub"]
         STACK["LoopStack<br/>the layers"]
+        METRO["Metronome<br/>scheduler.rs, click.rs"]
     end
 
     subgraph HAL["looper-hal - converts, chunks, owns the device"]
@@ -189,20 +196,25 @@ flowchart TB
     MAIN --> UIS
     MAIN -->|"tick(space, now)"| LOOPER
     UIL --> UII
-    UIL -->|"Action, LooperAction"| APP
+    UIL -->|"Action::Looper"| APP
     UIS -->|"Action::Start, EditSettings"| APP
-    APP --> LOOPER
-    APP --> SET
-    LOOPER --> SM
+    APP -->|"act"| LOOPER
+    APP -->|"edit"| SET
+    LOOPER --> PEDAL
+    PEDAL --> SM
     LOOPER --> PR
     LOOPER --> INPUT
+    LOOPER --> TEMPO
     LOOPER --> MIRROR
     SET --> CFG
-    MIRROR --> WAV
     APP --> BACKEND
     SET --> BACKEND
 
-    LOOPER ==>|"state, clear, remove layer"| SHARED
+    LOOPER ==>|"saves, tempo, delete - in order"| WRITER
+    WRITER --> WAV
+    WAV --> DISK
+
+    LOOPER ==>|"state, requests, levels"| SHARED
     SHARED ==>|"loop length, position, layers, underruns"| LOOPER
     SHARED <--> INPATH
     SHARED <--> OUTPATH
@@ -212,6 +224,7 @@ flowchart TB
     INPATH --> BRIDGE
     BRIDGE --> OUTPATH
     OUTPATH --> STACK
+    OUTPATH --> METRO
     OUTPATH --> BACKEND
     BACKEND --> SPEAKERS
     BACKEND ==>|"on failure"| FAULT
@@ -293,7 +306,8 @@ crates/
 
 `looper-core` holds no `egui::` types at all and `looper-hal` holds no
 looping logic, so neither end can quietly acquire a dependency on the
-other. `main.rs` and `looper-ui-egui` are the only framework-aware parts.
+other. `looper-app`'s shell and `looper-ui-egui` are the only
+framework-aware parts.
 
 Tests live in sibling `*_tests.rs` files (via `#[path = "..."] mod tests;`)
 rather than inline, to keep the implementation files themselves short -
@@ -321,7 +335,10 @@ press ending the first take into a dub publishes `Overdubbing` straight
 from `Recording`, which the audio thread already takes in one go - close
 the take, round it to the bar, open a layer at the top - and reports both
 takes' ends, so the mirror splits them where the stack did. Not with
-`max_layers = 1`: there's no layer to dub into.
+`max_layers = 1`: there's no layer to dub into. The whole of it - every
+record mode, from every state, through every gesture, to the state and
+layers left - is one table, `every_gesture_from_every_state_in_every_mode`
+in `looper_tests.rs`; the press logic itself is `looper/pedal.rs`.
 
 REC→DUB's "next layer" changes no state, so it crosses as a request of
 its own (`request_next_layer`): the audio thread closes the open dub and
@@ -440,9 +457,10 @@ stacked, eight by default, and the newest can be dropped again
 only lowers the stack's count, and the samples stay in the buffer until
 the next take is recorded into that slot. So the stack counts how many
 layers above `count` are still intact, and forgets them all the moment a
-take begins. A long-press clear stays final. The mirror keeps the dropped takes for the same window, so
-a redone layer is saved again; the two are driven by the same events and
-a test holds each to the same rule. Not across restarts.
+take begins. A long-press clear stays final. The mirror keeps the
+dropped takes for the same window, so a redone layer is saved again; the
+two are driven by the same events and a test holds each to the same
+rule. Not across restarts.
 
 Each layer is a full-length pre-allocated buffer, but an overdub can
 start anywhere in the loop and be stopped early, so a layer only counts
@@ -642,7 +660,8 @@ window opened.
 
 The last two are a memory multiplier - every layer is pre-allocated at
 the full loop length, so it costs `seconds x layers x sample rate x 4`
-bytes, and the settings screen shows the figure next to the sliders.
+bytes, and the settings screen shows the figure next to the sliders -
+with the most the UI thread's copy can add, which is as much again.
 
 `mode` (`"mini"` or `"extended"`, default mini) is the one setting not
 on the Settings screen: it's the Mini / Extended switch in the looper

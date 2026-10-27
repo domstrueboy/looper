@@ -286,8 +286,8 @@ impl LooperState {
         self.max_layers
     }
 
-    /// Whether the overdub control would do anything: there has to be a
-    /// loop playing, and a layer left to record into.
+    /// Whether a press would open a dub: there has to be a loop playing,
+    /// and a layer left to record into.
     pub fn can_overdub(&self) -> bool {
         match self.state() {
             LoopState::Looping => self.layer_count() < self.max_layers,

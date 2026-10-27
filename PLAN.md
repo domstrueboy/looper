@@ -222,12 +222,13 @@ in the order they're fixed:
 - **9i. Tests - done.** `temp_dir` was written four times; it's one
   test-only `test_support.rs` now. The other same-named helpers
   (`settings`, `start`) do different jobs and stay apart.
-- **9j. Docs.** README's module diagram puts `app.rs` in looper-core
-  and lacks `tempo.rs`, `tap_tempo.rs`, `metronome.rs`, `scheduler.rs`
-  and `click.rs`. Stale doc comments: `state_machine.rs` (long press
-  clears; "the overdub control"; Arming "treated like Idle"),
-  `looper-ui-egui`'s "`egui` nowhere else", `main.rs`'s `ui/`. The user
-  guide read against the app. The screenshot needs retaking by hand.
+- **9j. Docs - done.** README's module diagram redrawn (`app.rs` in the
+  shell; tempo, pedal, writer and metronome added); stale doc comments
+  in `state_machine.rs`, `can_overdub` and `looper-ui-egui`; the user
+  guide's first-run list given the metronome, time signature and record
+  mode, its controls table the two missing cases, and its "not yet"
+  list brought up to date, and the screenshot retaken - Extended, three
+  layers playing.
 - **9k. The settings screen a leaf - done.** Its widgets edit a copy of
   the choice, returned as `Action::EditSettings` if it changed;
   `SettingsState::edit` re-asks the backends only when the driver or a
