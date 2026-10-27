@@ -222,8 +222,9 @@ in the order they're fixed:
   `SettingsState` draft in place and calls `refresh_*` (device
   enumeration) from inside `render` - the same rule, if it's to hold
   there too.
-- **9i. Tests.** `temp_dir` is written four times; one shared test
-  helper.
+- **9i. Tests - done.** `temp_dir` was written four times; it's one
+  test-only `test_support.rs` now. The other same-named helpers
+  (`settings`, `start`) do different jobs and stay apart.
 - **9j. Docs.** README's module diagram puts `app.rs` in looper-core
   and lacks `tempo.rs`, `tap_tempo.rs`, `metronome.rs`, `scheduler.rs`
   and `click.rs`. Stale doc comments: `state_machine.rs` (long press

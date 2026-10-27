@@ -20,3 +20,6 @@ pub mod state_machine;
 pub mod tap_tempo;
 pub mod tempo;
 pub mod wav;
+
+#[cfg(test)]
+mod test_support;

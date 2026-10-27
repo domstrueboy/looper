@@ -1,12 +1,7 @@
 use super::*;
 
 use crate::loop_mirror::load_beats;
-
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
-}
+use crate::test_support::temp_dir;
 
 #[test]
 fn what_was_asked_is_on_disk_once_flushed() {

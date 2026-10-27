@@ -1,5 +1,7 @@
 use super::*;
 
+use crate::test_support::temp_dir;
+
 fn saved() -> AppConfig {
     AppConfig {
         device_name: "Audient USB Audio ASIO Driver".to_string(),
@@ -209,12 +211,6 @@ fn memory_is_the_product_of_length_layers_and_rate() {
 }
 
 // --- The file half -----------------------------------------------------
-
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
-}
 
 #[test]
 fn a_saved_file_reads_back_as_the_same_settings() {

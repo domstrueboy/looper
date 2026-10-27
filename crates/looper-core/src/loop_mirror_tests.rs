@@ -5,6 +5,7 @@ use ringbuf::{HeapProd, HeapRb};
 
 use crate::audio::loop_stack::LoopStack;
 use crate::config::AppConfig;
+use crate::test_support::temp_dir;
 
 const RATE: u32 = 44_100;
 
@@ -100,12 +101,6 @@ impl LoopMirror {
             .map(|(index, take)| lay_out(take, index, self.loop_len))
             .collect()
     }
-}
-
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
 }
 
 #[test]

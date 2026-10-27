@@ -293,7 +293,9 @@ other. `main.rs` and `looper-ui-egui` are the only framework-aware parts.
 
 Tests live in sibling `*_tests.rs` files (via `#[path = "..."] mod tests;`)
 rather than inline, to keep the implementation files themselves short -
-see any of the pairs above. Run them with `cargo test`.
+see any of the pairs above. A helper more than one of them needs goes in
+`looper-core/src/test_support.rs`, compiled for tests only. Run them
+with `cargo test`.
 
 ## State machine
 

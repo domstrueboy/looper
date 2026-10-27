@@ -3,6 +3,8 @@ use super::*;
 use looper_hal::mock::{self, MockDriver, mock, mock_with};
 use looper_hal::{BackendId, HalError};
 
+use crate::test_support::temp_dir;
+
 /// Small enough to follow by hand, and a rate the mock device offers.
 const RATE: u32 = 44_100;
 const PREROLL_MS: u32 = 1_000;
@@ -25,12 +27,6 @@ fn counted_in() -> AppConfig {
         record_start: config::RecordStart::CountIn,
         ..settings()
     }
-}
-
-fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("looper-pedal-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    dir
 }
 
 /// A looper on a device that isn't there, so nothing this does can reach
