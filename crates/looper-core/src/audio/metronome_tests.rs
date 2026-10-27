@@ -1,4 +1,5 @@
 use super::*;
+use crate::audio::click::{accent, click};
 
 /// 120 BPM at 48 kHz: a beat every 24,000 frames, a click 960 long.
 const RATE: u32 = 48_000;
@@ -33,14 +34,14 @@ fn free_run(metronome: &mut Metronome, frames: usize) -> Vec<f32> {
 
 #[test]
 fn it_clicks_on_every_beat_whatever_the_block_size() {
-    let mut metronome = Metronome::new(RATE, 120);
+    let mut metronome = Metronome::new(RATE, 120, 4);
     let out = free_run(&mut metronome, BEAT * 3);
     assert_eq!(onsets(&out), vec![0, BEAT, 2 * BEAT]);
 }
 
 #[test]
 fn restarting_counts_from_beat_one() {
-    let mut metronome = Metronome::new(RATE, 120);
+    let mut metronome = Metronome::new(RATE, 120, 4);
     free_run(&mut metronome, BEAT / 2);
 
     metronome.restart();
@@ -54,7 +55,7 @@ fn on_a_loop_the_top_is_beat_one() {
     // A loop that isn't a whole number of beats - the grid starts over
     // at its top rather than running on.
     let loop_len = BEAT + 10_000;
-    let mut metronome = Metronome::new(RATE, 120);
+    let mut metronome = Metronome::new(RATE, 120, 4);
     let mut out = vec![0.0; loop_len + 2_000];
     // Starting past the last beat's click, 4,000 frames before the top.
     let mut pos = loop_len - 4_000;
@@ -67,7 +68,7 @@ fn on_a_loop_the_top_is_beat_one() {
 
 #[test]
 fn clicks_are_added_over_what_is_already_playing() {
-    let mut metronome = Metronome::new(RATE, 120);
+    let mut metronome = Metronome::new(RATE, 120, 4);
     let mut out = vec![0.25; BLOCK];
     metronome.add_free(&mut out);
     assert_eq!(out[0], 0.25, "the click's first sample is silence");
@@ -79,7 +80,7 @@ fn a_tempo_change_keeps_the_place_in_the_bar() {
     // Half way to the next beat at 120 is half way at 60 too - the next
     // click comes half a 60 BPM beat later, not wherever 12,000 frames
     // lands on the slower grid.
-    let mut metronome = Metronome::new(RATE, 120);
+    let mut metronome = Metronome::new(RATE, 120, 4);
     free_run(&mut metronome, BEAT + BEAT / 2);
 
     metronome.set_bpm(60.0);
@@ -87,3 +88,17 @@ fn a_tempo_change_keeps_the_place_in_the_bar() {
 
     assert_eq!(onsets(&out), vec![BEAT]);
 }
+
+#[test]
+fn beat_one_is_accented_and_the_bar_follows_the_time_signature() {
+    // 3/4: the accent comes round every third click.
+    let mut metronome = Metronome::new(RATE, 120, 3);
+    let out = free_run(&mut metronome, BEAT * 4);
+    let len = accent(RATE).len();
+
+    assert_eq!(out[..len], accent(RATE)[..], "beat one");
+    assert_eq!(out[BEAT..BEAT + len], click(RATE)[..], "beat two");
+    assert_eq!(out[3 * BEAT..3 * BEAT + len], accent(RATE)[..], "the next bar's one");
+    assert_eq!(metronome.bar_frames(), (3 * BEAT) as f64);
+}
+

@@ -4,6 +4,9 @@ use std::f32::consts::TAU;
 /// be shrill.
 pub const CLICK_FREQ_HZ: f32 = 1_000.0;
 
+/// Beat one's click: a fifth up, so the bar is heard without counting.
+pub const ACCENT_FREQ_HZ: f32 = 1_500.0;
+
 /// Long enough to hear as a pitch, short enough to stay a tick.
 pub const CLICK_MS: u32 = 20;
 
@@ -22,11 +25,20 @@ const ATTACK_MS: u32 = 1;
 /// granted - so the callback only ever copies it, and a shared-mode
 /// endpoint's own rate gets a click of the right pitch and length.
 pub fn click(sample_rate: u32) -> Vec<f32> {
+    burst(sample_rate, CLICK_FREQ_HZ)
+}
+
+/// Beat one's click: the same, higher.
+pub fn accent(sample_rate: u32) -> Vec<f32> {
+    burst(sample_rate, ACCENT_FREQ_HZ)
+}
+
+fn burst(sample_rate: u32, freq_hz: f32) -> Vec<f32> {
     let len = frames(CLICK_MS, sample_rate).max(2);
     let attack = frames(ATTACK_MS, sample_rate).clamp(1, len - 1);
     (0..len)
         .map(|i| {
-            let phase = TAU * CLICK_FREQ_HZ * i as f32 / sample_rate as f32;
+            let phase = TAU * freq_hz * i as f32 / sample_rate as f32;
             CLICK_PEAK * envelope(i, attack, len) * phase.sin()
         })
         .collect()

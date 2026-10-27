@@ -20,9 +20,6 @@ use crate::preroll::Preroll;
 use crate::tap_tempo::TapTempo;
 use crate::tempo::LoopTempo;
 
-/// 4/4, as the metronome counts it.
-const BEATS_PER_BAR: u32 = 4;
-
 /// The metronome's range, for a tempo that isn't a whole number.
 fn bpm_range() -> RangeInclusive<f64> {
     f64::from(*METRONOME_BPM_RANGE.start())..=f64::from(*METRONOME_BPM_RANGE.end())
@@ -624,12 +621,16 @@ impl LooperState {
         (self.bar_frames() / f64::from(self.sample_rate)) as f32
     }
 
+    fn beats_per_bar(&self) -> u32 {
+        self.config.time_signature.beats_per_bar()
+    }
+
     /// The same bar the audio thread counts and rounds to.
     fn bar_frames(&self) -> f64 {
         Scheduler::new(
             self.sample_rate,
             f64::from(self.config.metronome_bpm),
-            Pattern::METRONOME,
+            Pattern::metronome(self.beats_per_bar()),
         )
         .frames_per_bar()
     }
@@ -689,11 +690,11 @@ impl LooperState {
         {
             self.tempo_pending = None;
             let len = self.control.loop_len();
-            let guess = LoopTempo::guess(len, self.sample_rate);
+            let guess = LoopTempo::guess(len, self.sample_rate, self.beats_per_bar());
             self.loop_tempo = Some(match source {
                 TempoSource::Guess => guess,
                 TempoSource::Click(bar) => {
-                    LoopTempo::from_bars(len, self.sample_rate, bar, BEATS_PER_BAR)
+                    LoopTempo::from_bars(len, self.sample_rate, bar, self.beats_per_bar())
                 }
                 // A hand-edited file can say anything; a tempo the click
                 // can't play falls back to the guess.

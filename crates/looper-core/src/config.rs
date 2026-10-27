@@ -166,6 +166,9 @@ pub struct AppConfig {
     /// See `METRONOME_BPM_RANGE`.
     #[serde(default = "default_metronome_bpm")]
     pub metronome_bpm: u32,
+    /// See `TimeSignature`.
+    #[serde(default)]
+    pub time_signature: TimeSignature,
     /// See `RecordMode`.
     #[serde(default, alias = "after_take")]
     pub record_mode: RecordMode,
@@ -191,6 +194,31 @@ pub enum RecordStart {
     CountIn,
     /// When the input first crosses `detect_db`, from just before it.
     Detect,
+}
+
+/// The metronome's bar: how many clicks, beat one accented. 6/8 clicks
+/// the eighths, so its BPM counts them. It sets a bar's length wherever
+/// one is used - the count-in, rounding a take to the bar, a loop's
+/// tempo - so it's a setting rather than changed under a loop.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TimeSignature {
+    #[default]
+    #[serde(rename = "4/4")]
+    FourFour,
+    #[serde(rename = "3/4")]
+    ThreeFour,
+    #[serde(rename = "6/8")]
+    SixEight,
+}
+
+impl TimeSignature {
+    pub fn beats_per_bar(self) -> u32 {
+        match self {
+            Self::FourFour => 4,
+            Self::ThreeFour => 3,
+            Self::SixEight => 6,
+        }
+    }
 }
 
 /// How a playing loop stops - by Stop, or a double press. Not the end of
@@ -363,6 +391,7 @@ impl Default for AppConfig {
             max_layers: DEFAULT_MAX_LAYERS,
             long_press_ms: DEFAULT_LONG_PRESS_MS,
             metronome_bpm: DEFAULT_METRONOME_BPM,
+            time_signature: TimeSignature::FourFour,
             record_mode: RecordMode::RecPlay,
             mode: Mode::Mini,
         }

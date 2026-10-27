@@ -22,11 +22,12 @@ surviving restarts as WAV layers, an app icon, no console window in
 release builds, technical + user docs, and a Windows CI build/release
 pipeline.
 
-**v2 is under way** - steps 0-7 done: the mini/extended switch, layer
+**v2 is under way** - steps 0-8 done: the mini/extended switch, layer
 mute, redo, the metronome with live tempo, loops snapped to bars, a
 tempo for every loop, saved with it, and the pedal feel - two pedals
 (Space never stops, S always does), three record modes, hold to undo,
-and record start and stop modes. Next is step 8.
+and record start and stop modes - and step 8: tap tempo, loop and click
+levels on screen, and a time signature. Next is step 9, the review.
 
 Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
@@ -371,7 +372,7 @@ How the main control behaves, as settings rather than one fixed way.
 - **8b. Levels on screen - done.** Click volume (fixed at half scale today)
   and loop volume (only in Settings today) as live controls on the
   looper screen, published through `SharedControl` like the tempo.
-- **8c. Time signature.** 4/4, 3/4 or 6/8 for the metronome - the
+- **8c. Time signature - done.** 4/4, 3/4 or 6/8 for the metronome - the
   scheduler's `Pattern` already has a bar length; the bar rounding,
   the count-in and tempo-from-the-loop all have to follow it.
 

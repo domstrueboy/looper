@@ -12,12 +12,19 @@ pub struct Pattern {
 }
 
 impl Pattern {
-    /// 4/4, a click on every beat, no accents.
-    pub const METRONOME: Self = Self {
-        steps_per_beat: 1,
-        steps_per_bar: 4,
-        hits: 0b1111,
-    };
+    /// 4/4, a click on every beat.
+    pub const METRONOME: Self = Self::metronome(4);
+
+    /// A click on every beat of a `beats`-beat bar. Which one is
+    /// accented is the player's business: the step says.
+    pub const fn metronome(beats: u32) -> Self {
+        assert!(beats >= 1 && beats <= 8);
+        Self {
+            steps_per_beat: 1,
+            steps_per_bar: beats,
+            hits: (1 << beats) - 1,
+        }
+    }
 
     /// Up to 64 steps a bar - four bars of sixteenths, or one of 64ths.
     pub fn new(steps_per_beat: u32, steps_per_bar: u32, hits: u64) -> Self {

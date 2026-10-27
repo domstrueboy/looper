@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
     DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode, TimeSignature,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -243,6 +243,14 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
             .text("Metronome")
             .suffix(" BPM"),
     );
+    ui.horizontal(|ui| {
+        ui.label("Time signature");
+        let signature = &mut settings.config.time_signature;
+        ui.radio_value(signature, TimeSignature::FourFour, "4/4");
+        ui.radio_value(signature, TimeSignature::ThreeFour, "3/4");
+        ui.radio_value(signature, TimeSignature::SixEight, "6/8")
+            .on_hover_text("Six clicks a bar: the BPM counts eighths");
+    });
     // ">" rather than an arrow: egui's bundled proportional font has no
     // arrow glyph, and it would show as an empty box.
     // One under another: three side by side don't fit the window.

@@ -1,4 +1,4 @@
-use super::click::click;
+use super::click::{accent, click};
 use super::scheduler::{Pattern, Scheduler, Voice};
 
 /// The click track: the click sound, where its beats fall, and the voice
@@ -6,8 +6,13 @@ use super::scheduler::{Pattern, Scheduler, Voice};
 /// built in `new`, so playing it allocates nothing.
 pub struct Metronome {
     click: Vec<f32>,
+    accent: Vec<f32>,
+    pattern: Pattern,
     scheduler: Scheduler,
     voice: Voice,
+    /// Whether the voice is playing beat one's click rather than the
+    /// others'.
+    accented: bool,
     /// Frames counted since `restart`, for when there's no loop to keep
     /// time with.
     free_pos: u64,
@@ -18,11 +23,15 @@ pub struct Metronome {
 }
 
 impl Metronome {
-    pub fn new(sample_rate: u32, bpm: u32) -> Self {
+    pub fn new(sample_rate: u32, bpm: u32, beats_per_bar: u32) -> Self {
+        let pattern = Pattern::metronome(beats_per_bar);
         Self {
             click: click(sample_rate),
-            scheduler: Scheduler::new(sample_rate, f64::from(bpm), Pattern::METRONOME),
+            accent: accent(sample_rate),
+            pattern,
+            scheduler: Scheduler::new(sample_rate, f64::from(bpm), pattern),
             voice: Voice::default(),
+            accented: false,
             free_pos: 0,
             sample_rate,
             bpm: f64::from(bpm),
@@ -39,7 +48,7 @@ impl Metronome {
             return;
         }
         let old_step = self.scheduler.frames_per_step();
-        self.scheduler = Scheduler::new(self.sample_rate, bpm, Pattern::METRONOME);
+        self.scheduler = Scheduler::new(self.sample_rate, bpm, self.pattern);
         self.free_pos = (self.free_pos as f64 * self.scheduler.frames_per_step() / old_step) as u64;
         self.bpm = bpm;
     }
@@ -90,11 +99,14 @@ impl Metronome {
     fn add_from(&mut self, out: &mut [f32], start: u64) {
         let mut done = 0;
         for beat in self.scheduler.events(start, out.len()) {
-            self.voice.add_into(&self.click, &mut out[done..beat.offset], self.gain);
+            let sound = if self.accented { &self.accent } else { &self.click };
+            self.voice.add_into(sound, &mut out[done..beat.offset], self.gain);
             self.voice.trigger();
+            self.accented = beat.step == 0;
             done = beat.offset;
         }
-        self.voice.add_into(&self.click, &mut out[done..], self.gain);
+        let sound = if self.accented { &self.accent } else { &self.click };
+        self.voice.add_into(sound, &mut out[done..], self.gain);
     }
 }
 

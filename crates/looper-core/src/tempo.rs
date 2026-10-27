@@ -15,10 +15,15 @@ pub struct LoopTempo {
 
 impl LoopTempo {
     /// For a loop played without the click. Loops are nearly always 1, 2,
-    /// 4 or 8 bars, so the beat count is the power of two that puts the
-    /// tempo in `GUESS_BPM`; halve or double put a wrong guess right.
-    pub fn guess(loop_len: usize, sample_rate: u32) -> Self {
-        let mut tempo = Self::with_beats(1, loop_len, sample_rate);
+    /// 4 or 8 bars, so the beat count is a bar's beats times the power of
+    /// two that puts the tempo in `GUESS_BPM` - halved below a bar too,
+    /// while the beats split evenly. Halve or double put a wrong guess
+    /// right.
+    pub fn guess(loop_len: usize, sample_rate: u32, beats_per_bar: u32) -> Self {
+        let mut tempo = Self::with_beats(beats_per_bar, loop_len, sample_rate);
+        while tempo.bpm >= GUESS_BPM.end && tempo.beats.is_multiple_of(2) {
+            tempo = Self::with_beats(tempo.beats / 2, loop_len, sample_rate);
+        }
         while tempo.bpm < GUESS_BPM.start {
             tempo = tempo.doubled_unchecked();
         }

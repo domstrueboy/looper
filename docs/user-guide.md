@@ -187,7 +187,12 @@ times, and the tempo follows your taps - the last four gaps, averaged,
 so it settles as you keep tapping. Pause for two seconds and the next
 tap starts a fresh count.
 
-- With no loop, it simply clicks along at the tempo.
+- With no loop, it simply clicks along at the tempo. Beat one of each
+  bar is a higher click, so you hear where the bar starts.
+- **Time signature** in Settings sets the bar: **4/4**, **3/4** or
+  **6/8**. In 6/8 it clicks all six eighths and the BPM counts them. The
+  bar it sets is the one a count-in lasts, a recording is rounded to,
+  and a loop's tempo is counted in.
 - For a count-in before the first recording, set **Record start** to
   **Count-in**: **one bar** of clicks, then recording starts exactly on
   the next beat one.

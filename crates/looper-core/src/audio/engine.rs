@@ -623,7 +623,11 @@ pub fn build_audio_path(
                 10f32.powf(settings.detect_db as f32 / 20.0),
                 (sample_rate as usize * DETECT_LOOKBACK_MS / 1_000).max(1),
             ),
-            metronome: Metronome::new(sample_rate, settings.metronome_bpm),
+            metronome: Metronome::new(
+                sample_rate,
+                settings.metronome_bpm,
+                settings.time_signature.beats_per_bar(),
+            ),
             previous_state: LoopState::Idle,
         },
     };

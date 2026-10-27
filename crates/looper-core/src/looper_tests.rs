@@ -773,6 +773,25 @@ fn a_count_in_is_one_bar_not_the_record_delay() {
 }
 
 #[test]
+fn in_three_four_the_count_in_is_three_beats() {
+    // A beat at 120 is 22,050 frames; three of them, not four.
+    let three_four = AppConfig {
+        time_signature: config::TimeSignature::ThreeFour,
+        ..counted_in()
+    };
+    let (mut looper, driver, dir) = start("looper-count-in-3-4", &three_four);
+    let at = Instant::now();
+    press(&mut looper, at, at);
+
+    feed(&mut looper, &driver, 3 * 22_050 - 1_000, at);
+    assert_eq!(looper.state(), LoopState::Arming);
+    feed(&mut looper, &driver, 2_000, at);
+
+    assert_eq!(looper.state(), LoopState::Recording, "on the third beat's end");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn turning_the_metronome_off_leaves_a_count_in_counting() {
     let (mut looper, driver, dir) = start("looper-count-in-off", &counted_in());
     looper.toggle_metronome();

@@ -474,7 +474,19 @@ callback picks it up on its next block. A change keeps the click's place
 in the bar - its own count is rescaled to the new grid rather than left
 to land anywhere on it. The click is added to the output after
 the loop, so it plays over everything and isn't scaled by the loop
-volume. What it keeps time with depends on the state:
+volume.
+
+`time_signature` sets the bar - `Pattern::metronome(beats)`, a step a
+beat - and beat one plays a second sound, the same burst a fifth up
+(`click::accent`), chosen from the step the scheduler reports. Both
+threads build the bar from the same setting: the audio thread to count
+in and round a take, the UI thread to wait for the bar line and count a
+loop's beats. The tempo guess counts in its bars too: a bar's beats
+times a power of two, halved below a bar while the beats split evenly.
+It's fixed for the stream, like the record modes - changing it under a
+loop would reinterpret the loop's bars.
+
+What the click keeps time with depends on the state:
 
 | State | Clicks follow |
 |---|---|
@@ -604,6 +616,7 @@ window opened.
 | `fade_ms` | 3000 | 500-10000 | the fade, with `fade_out` |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold is: Space to undo, S to clear |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
+| `time_signature` | `"4/4"` | `"4/4"`, `"3/4"`, `"6/8"` | the metronome's bar - 6/8 clicks the eighths |
 | `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"`, `"rec_dub_per_pass"` | see "State machine"; the older `after_take = "play"/"dub"` still reads |
 | `latency_ms` | 8 | 2-50 | callback headroom - raise it if the log reports underruns |
 | `max_loop_secs` | 60 | 10-120 | longest recordable loop |
