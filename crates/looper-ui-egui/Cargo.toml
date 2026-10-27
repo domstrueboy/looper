@@ -2,6 +2,7 @@
 name = "looper-ui-egui"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # One screen set, drawn with egui. A different toolkit - or a second
 # skin - is another crate beside this one rather than a change to any of

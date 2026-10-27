@@ -1,0 +1,12 @@
+Looper Pedal
+https://github.com/domstrueboy/looper-pedal
+
+The source code is MIT-licensed - see LICENSE.txt.
+
+This build includes the Steinberg ASIO SDK, used under its GNU General
+Public License version 3 option, so looper_pedal.exe as distributed here
+is covered by the GPL version 3 - see GPL-3.0.txt. Its complete source is
+the repository above, at the tag this release was built from, and the
+ASIO SDK it was built with (https://github.com/audiosdk/asio).
+
+ASIO is a trademark and software of Steinberg Media Technologies GmbH.

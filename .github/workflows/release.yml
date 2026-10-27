@@ -86,6 +86,11 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/release/looper_pedal.exe dist/
+          # The source is MIT, but the exe carries the ASIO SDK under its
+          # GPLv3 option - so the zip goes out under GPLv3, with its text.
+          Copy-Item LICENSE dist/LICENSE.txt
+          Copy-Item licenses/GPL-3.0.txt dist/
+          Copy-Item packaging/NOTICE.txt dist/
           Compress-Archive -Path dist/* -DestinationPath looper-pedal-${{ steps.version.outputs.version }}-windows-x64.zip
 
       # Every build's zip, release or not, so a -dev build can be tried

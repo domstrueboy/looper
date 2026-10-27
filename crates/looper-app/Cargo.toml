@@ -2,6 +2,7 @@
 name = "looper-app"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # The executable keeps its own name: it's what the release zip carries
 # and what anyone who already has the app will look for.

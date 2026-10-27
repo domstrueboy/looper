@@ -2,6 +2,7 @@
 name = "looper-core"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 # No cpal and no egui: this crate is what the app does, not what it runs
 # on or what it looks like. That is also what lets its tests run on any

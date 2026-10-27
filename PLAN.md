@@ -158,18 +158,11 @@ two equal device ids do not mean one duplex device.
 
 Worth settling before the work they block starts.
 
-- **Open source - decided; which license is still open.** It settles
-  the other two questions: CI builds against the ASIO SDK's GPLv3
-  option, which an open-source release can meet - the source is public
-  anyway, and the released exe goes out under GPLv3's terms - and an
-  open-source project can sign for free (SignPath Foundation). The
-  source's own license is the choice left: GPL-3.0 keeps every fork open
-  too; MIT keeps the most options for a paid tier later, since nothing
-  but the author's own code would need relicensing. Either way a
-  `LICENSE` file, the `license` field in `Cargo.toml`, and a line in the
-  README, in step 11. Moving to closed source later would mean
-  Steinberg's proprietary ASIO SDK licence (free, but signed for) in
-  place of the GPLv3 one.
+- **Open source, MIT - decided.** The source is MIT; the released exe
+  carries the ASIO SDK under its GPLv3 option, so the zip goes out under
+  GPLv3 terms with both texts (see README's *License*). Moving to closed
+  source later would mean Steinberg's proprietary ASIO SDK licence (free,
+  but signed for) in place of the GPLv3 one.
 - **The order after the release** (steps 12-16) is a proposal: tuner
   first because it's small and keeps people from giving up, sessions
   before drums because a backing track you can come back to is the
@@ -211,7 +204,9 @@ warning from that.
   11 needs from them.
 - **10e. The run - paused at B1.** Sections 1-4 run on 2026-10-27
   (ASIO, build 20be9ef): all passed but three notes. **S4:** hovering a
-  radio option turns its text black, invisible on the dark theme.
+  radio option turns its text black, invisible on the dark theme - not
+  reproducible headless (kittest paints it near-white), so waiting on a
+  screenshot from the real window.
   **L5:** design question - hold Space undoes layers but never the first
   loop, which felt odd; decide whether it should clear the last one.
   **L6:** the plan's wording - hold S shows Stopped before Cleared.
@@ -219,11 +214,13 @@ warning from that.
 
 ### 11. Release 0.2
 
-- **License:** the `LICENSE` file and fields - see *Open decisions*.
-- **Signed exe,** through SignPath Foundation's free signing for
-  open-source projects (check its current terms when applying).
-  SmartScreen's "unknown publisher" scares people off more than it
-  seems to.
+- **11c. License - done.** MIT: `LICENSE`, the `license` field on every
+  crate, and the release zip carrying `LICENSE.txt`, `GPL-3.0.txt` and a
+  `NOTICE.txt` for the GPLv3 ASIO SDK inside the exe.
+- **Signed exe - postponed** (decided 2026-10-27; not for 0.2). Through
+  SignPath Foundation's free signing for open-source projects, when
+  picked up again. Until then SmartScreen shows "unknown publisher" -
+  say so in the README's download note.
 - **11b. Pedal keys - done.** **PageDown** works as Space and
   **PageUp** as S, the keys fixed-key foot pedals and presentation
   clickers send, so a cheap pedal works with no setup - held and
@@ -232,10 +229,10 @@ warning from that.
   10e's pedal (F1) turns out to send.
 - **Bluetooth warning** in Settings when an output looks like Bluetooth,
   and in the docs - wired headphones or the interface's own output.
-- **11a. CI - done.** A release only when the version drops `-dev`,
-  tagged after the build passes (see *CI / releases*), so pushing work
-  in progress is safe. **Verified at the first push**: the run goes
-  green, and makes no release while the version is `0.2.0-dev`.
+- **11a. CI - done, verified.** A release only when the version drops
+  `-dev`, tagged after the build passes (see *CI / releases*), so
+  pushing work in progress is safe. The first push went green with
+  `release: false`.
 - **README as the landing page:** a GIF demo rather than screenshots -
   launch, riff, loop, play over it - the USB pedal note, and the
   Bluetooth note. A Telegram channel for feedback, linked from it.
@@ -378,8 +375,8 @@ Releasing, by hand:
 
 Replaced the old scheme, where a bot bumped the patch on every push
 before building - so every push was a release, and a failed build left
-a tag with no zip. Whether `v0.1.1` and `v0.1.2` ever got theirs is
-still worth a look on the releases page.
+a tag with no zip - though every release up to `v0.1.8`, the last of
+that scheme, did get its zip.
 
 ## Docs
 

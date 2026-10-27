@@ -826,3 +826,17 @@ reports (i16, i24, i32 or f32) and converts at the edge, so other
 interfaces should work. ASIO is what it is tuned for - WASAPI runs, and
 is what a machine with no ASIO driver gets, at roughly an order more
 latency and with the timing wander noted under "Recording alignment".
+
+## License
+
+The source is MIT - see `LICENSE`.
+
+The Windows release is built with the Steinberg ASIO SDK, under that
+SDK's GPLv3 option, so the `looper_pedal.exe` in a release zip is covered
+by the GPL version 3. The zip carries both licenses and a `NOTICE.txt`
+saying so (`packaging/NOTICE.txt`, `licenses/GPL-3.0.txt`); its complete
+source is this repository at the release's tag, plus the SDK. MIT is
+GPL-compatible, so nothing here needs relicensing for that - and a build
+for a platform without ASIO carries none of it.
+
+ASIO is a trademark and software of Steinberg Media Technologies GmbH.
