@@ -442,3 +442,7 @@ fn layer_row(ui: &mut egui::Ui, looper: &LooperState, actions: &mut Vec<Action>)
     );
     ui.label(format!("1-{count}: mute / unmute a layer"));
 }
+
+#[cfg(test)]
+#[path = "looper_tests.rs"]
+mod tests;

@@ -10,3 +10,9 @@ edition.workspace = true
 egui = "0.36.1"
 looper-core = { path = "../looper-core" }
 looper-hal = { path = "../looper-hal" }
+
+# Drives the screens headless, finding widgets through AccessKit as a
+# screen reader would - no window, no GPU. Tests only: nothing of it
+# ships in the exe.
+[dev-dependencies]
+egui_kittest = "0.36.2"

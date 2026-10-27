@@ -288,3 +288,7 @@ fn controls(ui: &mut egui::Ui, settings: &SettingsState, draft: &mut AppConfig) 
 
     true
 }
+
+#[cfg(test)]
+#[path = "settings_tests.rs"]
+mod tests;

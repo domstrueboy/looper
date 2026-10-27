@@ -315,6 +315,14 @@ see any of the pairs above. A helper more than one of them needs goes in
 `looper-core/src/test_support.rs`, compiled for tests only. Run them
 with `cargo test`.
 
+The screens are tested the same way, headless: `egui_kittest` (a
+dev-dependency of `looper-ui-egui`, nothing of it in the exe) runs a
+screen against a looper on the mock backend, finds widgets through the
+AccessKit tree by their labels, clicks them or presses keys, and checks
+what the screen shows and which actions it returns. No window and no
+GPU. What a person still has to check - how it looks and sounds, real
+time, the real device - is `docs/test-plan.md`.
+
 ## State machine
 
 The two-pedal layout most loopers share (Boss RC-30, Ditto X2, the NUX

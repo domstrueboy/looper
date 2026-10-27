@@ -196,9 +196,16 @@ warning from that.
 - **10a. Controls - done.** The skeleton (what's needed, starting
   clean, a findings table), then every setting and every control on
   both screens, one row each: what to do, what should happen.
-- **10b. Cycles.** Each record mode, record start and stop mode through
-  its full cycle; what survives a restart and a trip to Settings.
-- **10c. Hardware.** The by-ear pass, owed twice; an interface
+- **10b. Screen tests - done.** `egui_kittest` (a dev-dependency of
+  `looper-ui-egui`, headless, no GPU) drives both screens through their
+  AccessKit tree: labels, greyed controls, and what each click or key
+  asks for. The plan's sections 1-3 trimmed to what needs eyes, ears,
+  real time or the real device. Snapshot tests not added: they need
+  wgpu, which crashes on this machine's Intel UHD.
+- **10c. Cycles.** Each record mode, record start and stop mode through
+  its full cycle, by ear; what survives a restart and a trip to
+  Settings.
+- **10d. Hardware.** The by-ear pass, owed twice; an interface
   unplugged mid-loop; a USB foot pedal's keys; WASAPI with no ASIO;
   Bluetooth headphones. Findings feed step 11.
 
