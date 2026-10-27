@@ -61,7 +61,7 @@ Record start is **Instant** from S6, so a press records at once.
 | L3 | Record, play, dub, play, stop, play - Space, Space, Space, Space, S, Space | You hear each: the take comes back on the loop, the dub joins it from the next pass, S cuts it, Space resumes from where it stopped. The dot pulses while recording and dubbing | |
 | L4 | **Undo**, then **Redo** | The dub goes from what you hear, then comes back exactly as it was | |
 | L5 | Hold Space while it loops | While held, the button shows **⟲**; on release the newest layer is gone | |
-| L6 | Hold S | While held, the stop button reads **🗑 Cleared**; then **Empty** | |
+| L6 | Hold S | **Stopped** at once - S acts as it goes down - then, once held past the hold time, the stop button reads **🗑 Cleared** and the screen shows **Empty** | |
 | L7 | Press Space twice quickly while it loops | It stops, and no sliver of a layer is left - the double feels like one gesture, not two presses | |
 | L8 | **M** | You hear the click, beat one higher | |
 | L9 | Hold **.** | The tempo keeps climbing while the key is held | |

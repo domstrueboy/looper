@@ -52,8 +52,9 @@ feel - two pedals (Space never stops, S always does), three record
 modes, hold to undo, record start and stop modes - and loop and click
 levels on screen - and step 9, a code review of all of it: saving off
 the UI thread, a bounded save copy, the callback's edge cases, both
-screens made leaves, and the press logic pinned in one table. Next is
-step 10, the manual test plan.
+screens made leaves, and the press logic pinned in one table. Steps 10
+and 11 are under way - the release is close; *Next session - start
+here*, under Roadmap, says what's left and in what order.
 
 Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
@@ -172,70 +173,70 @@ Worth settling before the work they block starts.
 
 Ordered. One step at a time, each a commit (see *Ground rules*).
 
-### 10. Manual test plan - next
+### Next session - start here
 
-A checklist in `docs/test-plan.md` for a person at the real app, once
-step 9's fixes are in, so it tests what ships. Every control on both
-screens, every setting, each record mode, record start and stop mode
-through its full cycle, and what should survive a restart. Plus what only
-hardware shows, owed since the post-v1 review: the by-ear pass (click
-against loop, overdubs in time, no click at the loop seam, a smooth
-fade), an unplugged interface mid-loop, a USB foot pedal (which keys it
-sends - step 11 makes those work), WASAPI
-on a laptop with no ASIO
-driver, and Bluetooth headphones - to see how bad it is and word the
-warning from that.
+Paused 2026-10-27, between steps 10 and 11, to be picked up some days
+later. Everything is committed and pushed; CI is green. In order:
 
-- **10a. Controls - done.** The skeleton (what's needed, starting
-  clean, a findings table), then every setting and every control on
-  both screens, one row each: what to do, what should happen.
-- **10b. Screen tests - done.** `egui_kittest` (a dev-dependency of
-  `looper-ui-egui`, headless, no GPU) drives both screens through their
-  AccessKit tree: labels, greyed controls, and what each click or key
-  asks for. The plan's sections 1-3 trimmed to what needs eyes, ears,
-  real time or the real device. Snapshot tests not added: they need
-  wgpu, which crashes on this machine's Intel UHD.
-- **10c. Cycles - done.** Every record start, the bar rounding, each
-  record mode and stop mode through its cycle, by ear; what a restart,
-  Settings and a killed app keep and drop.
-- **10d. Hardware - done.** The by-ear pass, owed since v1; an
-  interface unplugged mid-loop; a USB foot pedal's keys; WASAPI with no
-  ASIO; Bluetooth headphones - and a *Carry forward* table for what step
-  11 needs from them.
+1. **Resume the test run at B1** (`docs/test-plan.md`, section 5), with
+   the user at the rig - guided one row at a time: ask, wait for the
+   answer, log it. Sections 5-10 are needed for 0.2.0; 11-13 (a foot
+   pedal, a laptop with no ASIO, Bluetooth headphones) can wait for
+   0.2.1 if the hardware isn't to hand. Fill *Carry forward* as rows
+   ask for it.
+2. **Ask for the S4 screenshot** - a hovered radio option with its text
+   gone black - then fix S4 (10f).
+3. **Fix the run's findings,** one step each (10f), and have the failed
+   rows re-run.
+4. **11d, 11e, 11f** below - the Bluetooth warning, the README as the
+   landing page, then the release itself.
+
+### 10. Manual test plan
+
+`docs/test-plan.md`: what a person at the real app checks - how it
+looks and sounds, real time, the real device - with the screens'
+behaviour tested headless beside it.
+
+- **10a-10d - done.** The plan, 13 sections and a *Carry forward*
+  table; the screen tests with `egui_kittest` (headless, no GPU;
+  snapshot tests left out, since wgpu crashes on this machine's Intel
+  UHD).
 - **10e. The run - paused at B1.** Sections 1-4 run on 2026-10-27
-  (ASIO, build 20be9ef): all passed but three notes. **S4:** hovering a
-  radio option turns its text black, invisible on the dark theme - not
-  reproducible headless (kittest paints it near-white), so waiting on a
-  screenshot from the real window.
-  **L5:** design question - hold Space undoes layers but never the first
-  loop, which felt odd; decide whether it should clear the last one.
-  **L6:** the plan's wording - hold S shows Stopped before Cleared.
-  Resume from B1; findings fixed one at a time, failed rows re-run.
+  (ASIO, build 20be9ef): all passed but three notes.
+  - **S4 - open:** hovering a Record start, Stop or Record mode option
+    turns its text black, invisible on the dark theme. Not reproducible
+    headless - kittest paints it near-white, hint or no hint - so it
+    needs a screenshot from the real window.
+  - **L5 - decided, keep:** hold Space undoes layers but never the
+    first loop, which felt odd at first; kept as it is for 0.2 - a
+    clear stays hold S's job.
+  - **L6 - done:** the plan said "Cleared" while held; the app rightly
+    shows Stopped first. Reworded.
+- **10f. Fixes.** One step per finding, then the failed rows re-run.
 
 ### 11. Release 0.2
 
-- **11c. License - done.** MIT: `LICENSE`, the `license` field on every
-  crate, and the release zip carrying `LICENSE.txt`, `GPL-3.0.txt` and a
-  `NOTICE.txt` for the GPLv3 ASIO SDK inside the exe.
-- **Signed exe - postponed** (decided 2026-10-27; not for 0.2). Through
-  SignPath Foundation's free signing for open-source projects, when
-  picked up again. Until then SmartScreen shows "unknown publisher" -
-  say so in the README's download note.
-- **11b. Pedal keys - done.** **PageDown** works as Space and
-  **PageUp** as S, the keys fixed-key foot pedals and presentation
-  clickers send, so a cheap pedal works with no setup - held and
-  double-pressed like the keys they stand for, through one
-  `pedals_held` in the looper screen. Still to widen to whatever else
-  10e's pedal (F1) turns out to send.
-- **Bluetooth warning** in Settings when an output looks like Bluetooth,
-  and in the docs - wired headphones or the interface's own output.
-- **11a. CI - done, verified.** A release only when the version drops
-  `-dev`, tagged after the build passes (see *CI / releases*), so
-  pushing work in progress is safe. The first push went green with
-  `release: false`.
-- **README as the landing page:** a GIF demo rather than screenshots -
-  launch, riff, loop, play over it - the USB pedal note, and the
-  Bluetooth note. A Telegram channel for feedback, linked from it.
+- **11a-11c - done.** CI releases only when the version drops `-dev`,
+  tagged after the build passes - verified (see *CI / releases*).
+  **PageDown/PageUp** work as Space/S, for fixed-key foot pedals,
+  through one `pedals_held`. The source is MIT; the release zip carries
+  `LICENSE.txt`, `GPL-3.0.txt` and a `NOTICE.txt`, since the exe has the
+  ASIO SDK under its GPLv3 option - confirmed in a CI zip.
+- **11d. Bluetooth warning** in Settings when an output looks like
+  Bluetooth - names with "Bluetooth", "Hands-Free", "Headset" and the
+  like, refined from BT2 when that's run - and in the docs: wired
+  headphones or the interface's own output.
+- **11e. README as the landing page:** what it is and who for, the
+  download, a GIF demo (launch, riff, loop, play over it - the user
+  records it), the USB pedal note, the Bluetooth note, and that Windows
+  shows "unknown publisher" since the exe isn't signed yet.
+- **11f. The release:** the version to `0.2.0`, `cargo check`, commit,
+  push - CI tags and publishes - then `0.2.1-dev` (see *CI / releases*).
+
+**After 0.2.0, for 0.2.1:** sections 11-13 of the run if they waited;
+the pedal keys widened to what F1 finds; the Bluetooth names from BT2;
+a Telegram channel for feedback, linked from the README; signing
+through SignPath Foundation - postponed 2026-10-27, not for 0.2.
 
 ### 12. Tuner
 
