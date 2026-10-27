@@ -3,7 +3,8 @@
 # become crates of their own without moving anything again.
 #
 # The version lives here rather than in each crate: they're released
-# together as one app, and the release workflow bumps this one line.
+# together as one app. "-dev" while work goes on; dropping it and pushing
+# is what releases - see .github/workflows/release.yml.
 
 [workspace]
 members = ["crates/*"]

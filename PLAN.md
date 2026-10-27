@@ -209,8 +209,13 @@ warning from that.
   interface unplugged mid-loop; a USB foot pedal's keys; WASAPI with no
   ASIO; Bluetooth headphones - and a *Carry forward* table for what step
   11 needs from them.
-- **10e. The run.** The whole plan, at the real rig, with a local
-  release build; findings fixed one at a time, failed rows re-run.
+- **10e. The run - paused at B1.** Sections 1-4 run on 2026-10-27
+  (ASIO, build 20be9ef): all passed but three notes. **S4:** hovering a
+  radio option turns its text black, invisible on the dark theme.
+  **L5:** design question - hold Space undoes layers but never the first
+  loop, which felt odd; decide whether it should clear the last one.
+  **L6:** the plan's wording - hold S shows Stopped before Cleared.
+  Resume from B1; findings fixed one at a time, failed rows re-run.
 
 ### 11. Release 0.2
 
@@ -226,8 +231,10 @@ warning from that.
   to send.
 - **Bluetooth warning** in Settings when an output looks like Bluetooth,
   and in the docs - wired headphones or the interface's own output.
-- **CI actually verified:** the existing release workflow's zips have
-  never been checked (see *CI / releases*); a minor bump to 0.2.0.
+- **11a. CI - done.** A release only when the version drops `-dev`,
+  tagged after the build passes (see *CI / releases*), so pushing work
+  in progress is safe. **Verified at the first push**: the run goes
+  green, and makes no release while the version is `0.2.0-dev`.
 - **README as the landing page:** a GIF demo rather than screenshots -
   launch, riff, loop, play over it - the USB pedal note, and the
   Bluetooth note. A Telegram channel for feedback, linked from it.
@@ -354,24 +361,24 @@ Not code, but it decides whether anyone uses the code.
 
 ## CI / releases
 
-`.github/workflows/release.yml`: every push to `main` bumps the patch
-version, commits and tags it, builds on `windows-latest` against the
-GPLv3 ASIO SDK, and attaches a zip to a GitHub Release - one job, one
-run. It deliberately doesn't rely on the tag push triggering a second
-run, since pushes made with the default `GITHUB_TOKEN` don't trigger
-workflows.
+`.github/workflows/release.yml`: every push and pull request is tested
+and built on `windows-latest` against the GPLv3 ASIO SDK, and the zip
+kept as the run's artifact. A push to `main` is also *released* - but
+only when the version in the root `Cargo.toml` has no `-dev` and no tag
+yet. The tag is made by the release, after the tests and the build have
+passed, so a tag always has its zip.
 
-Step 11 verifies the rest. Confirmed working: the bump/commit/tag/push half - the bot produced
-both `v0.1.1` and `v0.1.2`, so branch protection isn't in the way.
-Still unverified: the bump step runs *before* the build, so those tags
-don't prove the headless ASIO SDK fetch, the tests, the release build
-or the zip upload succeeded. Worth checking whether those two releases
-actually have the zip attached.
+Releasing, by hand:
 
-Known rough edges: every commit to `main` becomes a tagged release
-(gate it behind a commit-message marker if that gets noisy), and only
-patch bumps are automatic - minor/major stay manual, since there's no
-commit convention to infer them from.
+1. Set the root `Cargo.toml` version to the release, e.g. `0.2.0`.
+2. `cargo check`, so `Cargo.lock` follows - CI builds `--locked`.
+3. Commit both and push: CI tests, builds, tags `v0.2.0`, publishes.
+4. Set the next `-dev` (e.g. `0.2.1-dev`), `cargo check`, commit.
+
+Replaced the old scheme, where a bot bumped the patch on every push
+before building - so every push was a release, and a failed build left
+a tag with no zip. Whether `v0.1.1` and `v0.1.2` ever got theirs is
+still worth a look on the releases page.
 
 ## Docs
 

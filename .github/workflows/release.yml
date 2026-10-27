@@ -1,18 +1,25 @@
 name: Build and Release
 
-# On every push to main (from a human - see the bump step's `if`), this
-# bumps the patch version, commits + tags it, builds the release binary
-# against that new version, and publishes a GitHub Release - all in one
-# job, one run. It deliberately does NOT rely on the tag push triggering
-# a second workflow run: pushes made with the default GITHUB_TOKEN don't
-# trigger new runs (GitHub's own anti-recursion rule), so chaining
-# "push tag -> new run builds it" would silently never fire.
+# Every push and pull request is tested and built. A push to main is
+# also released - but only when Cargo.toml's version is a release one
+# ("0.2.0", not "0.2.0-dev") that has no tag yet. So pushing work in
+# progress is safe, and releasing is an edit a person makes: drop
+# "-dev", push; afterwards set the next "-dev" by hand.
+#
+# The tag is made by the release itself, after the tests and the build
+# have passed - never before, so no tag exists without its zip.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+# Two pushes in quick succession must not both see the tag missing and
+# both release.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -26,76 +33,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Only for a direct push to main, and only if a human made it - the
-      # bot's own commit further down never reaches here anyway (see the
-      # note above), but this stays as an explicit guard so the intent is
-      # clear and it stays correct if the push mechanism ever changes.
-      - name: Bump patch version and tag
-        id: bump
-        if: >
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          github.actor != 'github-actions[bot]'
+      - name: Read the version
+        id: version
         shell: bash
         run: |
           set -euo pipefail
-          current=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
-          IFS='.' read -r major minor patch <<< "$current"
-          new="$major.$minor.$((patch + 1))"
-          new_tag="v$new"
+          version=$(grep -m1 '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-          git fetch --tags --quiet
-          if git rev-parse "$new_tag" >/dev/null 2>&1; then
-            echo "tag $new_tag already exists - stopping, resolve manually" >&2
-            exit 1
+          release=false
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            && [ "${{ github.event_name }}" = push ] \
+            && [ "${{ github.ref }}" = refs/heads/main ]; then
+            # The checkout is shallow and carries no tags.
+            git fetch --tags --quiet
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "::notice::v$version is already released - set the next -dev version"
+            else
+              release=true
+            fi
           fi
-
-          sed -i "s/^version = \"$current\"/version = \"$new\"/" Cargo.toml
-
-          # Cargo.lock mirrors each workspace member's version too; `cargo
-          # build --locked` below fails if it's stale, so keep it in sync
-          # by hand rather than needing a full cargo invocation just for
-          # this (which would need the ASIO SDK set up before this step).
-          # The version itself lives in the root `[workspace.package]`,
-          # which is what the grep and sed above edit.
-          #
-          # EVERY member, not just the binary: they all inherit that one
-          # version, so bumping one and leaving the rest behind makes the
-          # lock stale in a way only `--locked` notices - which it does,
-          # two steps later, after the tag has already been pushed.
-          awk -v old="$current" -v new="$new" '
-            /^name = "looper-/ { found = 1 }
-            found && /^version = / {
-              if ($0 == "version = \"" old "\"") $0 = "version = \"" new "\""
-              found = 0
-            }
-            { print }
-          ' Cargo.lock > Cargo.lock.tmp && mv Cargo.lock.tmp Cargo.lock
-
-          # Checked here, because this is the last moment it can still be
-          # put right: everything after this pushes a tag, and a stale
-          # lock only shows up at `cargo test --locked` two steps later.
-          stale=$(awk -v new="$new" '
-            /^name = "looper-/ { found = 1; name = $0 }
-            found && /^version = / {
-              if ($0 != "version = \"" new "\"") print name
-              found = 0
-            }
-          ' Cargo.lock)
-          if [ -n "$stale" ]; then
-            echo "Cargo.lock not bumped to $new for: $stale" >&2
-            exit 1
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.toml Cargo.lock
-          git commit -m "Bump version to $new_tag"
-          git tag -a "$new_tag" -m "$new_tag"
-          git push origin HEAD:main
-          git push origin "$new_tag"
-
-          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "Version $version, release: $release"
 
       - name: Install Rust (MSVC)
         uses: dtolnay/rust-toolchain@stable
@@ -127,16 +86,19 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist
           Copy-Item target/release/looper_pedal.exe dist/
-          Compress-Archive -Path dist/* -DestinationPath looper-pedal-windows-x64.zip
+          Compress-Archive -Path dist/* -DestinationPath looper-pedal-${{ steps.version.outputs.version }}-windows-x64.zip
 
+      # Every build's zip, release or not, so a -dev build can be tried
+      # from the run's page.
       - uses: actions/upload-artifact@v4
         with:
-          name: looper-pedal-windows-x64
-          path: looper-pedal-windows-x64.zip
+          name: looper-pedal-${{ steps.version.outputs.version }}-windows-x64
+          path: looper-pedal-${{ steps.version.outputs.version }}-windows-x64.zip
 
       - name: Create release
-        if: steps.bump.outputs.tag != ''
+        if: steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.bump.outputs.tag }}
-          files: looper-pedal-windows-x64.zip
+          tag_name: v${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          files: looper-pedal-${{ steps.version.outputs.version }}-windows-x64.zip
