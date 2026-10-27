@@ -1,6 +1,6 @@
 use super::*;
 
-use looper_hal::mock::{self, MockDriver, mock};
+use looper_hal::mock::{self, MockDriver, mock, mock_with};
 use looper_hal::{BackendId, HalError};
 
 /// Small enough to follow by hand, and a rate the mock device offers.
@@ -86,6 +86,17 @@ fn a_device_that_is_not_there_says_so_instead_of_panicking() {
     match LooperState::start_in(&backends, &missing, temp_dir("looper-missing")) {
         Err(err) => assert!(err.contains("not found"), "got: {err}"),
         Ok(_) => panic!("there is no such device"),
+    }
+}
+
+#[test]
+fn an_output_with_no_channels_is_refused_rather_than_run() {
+    let (backend, _driver) = mock_with(1, 0);
+    let backends = Backends::new(vec![Box::new(backend)]);
+
+    match LooperState::start_in(&backends, &settings(), temp_dir("looper-no-output")) {
+        Err(err) => assert!(err.contains("no channels"), "got: {err}"),
+        Ok(_) => panic!("a callback with nowhere to write would panic"),
     }
 }
 

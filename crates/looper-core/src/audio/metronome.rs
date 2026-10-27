@@ -43,8 +43,11 @@ impl Metronome {
     /// next beat stays half way. Left as a frame count, the old position
     /// would land anywhere on the new grid - two clicks in a row, or a
     /// long gap. Cheap enough to call every callback.
+    ///
+    /// A tempo that isn't finite and positive is ignored rather than
+    /// handed to `Scheduler::new`, whose assert would panic the callback.
     pub fn set_bpm(&mut self, bpm: f64) {
-        if bpm == self.bpm {
+        if bpm == self.bpm || !(bpm.is_finite() && bpm > 0.0) {
             return;
         }
         let old_step = self.scheduler.frames_per_step();
@@ -86,7 +89,14 @@ impl Metronome {
     /// Clicks in time with a playing loop, `out` starting at loop
     /// position `pos`. Beat one is the top of the loop, so the count
     /// starts over each time round.
+    ///
+    /// With no loop to keep time with - a take that got no input leaves
+    /// a playing state over an empty stack - it keeps its own count:
+    /// otherwise every block would be "the top", and click.
     pub fn add_on_loop(&mut self, out: &mut [f32], pos: usize, loop_len: usize) {
+        if loop_len == 0 {
+            return self.add_free(out);
+        }
         let to_top = loop_len.saturating_sub(pos).min(out.len());
         let (before, after) = out.split_at_mut(to_top);
         self.add_from(before, pos as u64);

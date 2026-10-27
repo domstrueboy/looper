@@ -198,11 +198,11 @@ in the order they're fixed:
   so a long one held every pass. Now a dub folds onto one loop length
   as it arrives, a first take holds only what the stack kept, and
   Settings says the copy can take as much memory again.
-- **9d. Real-time edges.** Looping with an empty stack (a take that got
-  no input, e.g. a dead capture end) makes `add_on_loop` retrigger the
-  click at the top of every block - a buzz. And `set_bpm` builds a
-  `Scheduler`, whose `assert!(bpm > 0.0)` is a panic reachable from the
-  callback; ignore a tempo that isn't finite and positive instead.
+- **9d. Real-time edges - done.** A playing state over an empty stack
+  clicked at the top of every block; the metronome now keeps its own
+  count there. A tempo that isn't finite and positive is ignored rather
+  than reaching `Scheduler::new`'s assert, and an output with no
+  channels is refused at start rather than panicking the callback.
 - **9e. Dead code.** `LoopStack`'s "remove the only layer" stash
   (`removed_len`, the `count == 0` branches of remove and redo) - undo
   never takes the first layer; `can_stop` (tests only); the comment on

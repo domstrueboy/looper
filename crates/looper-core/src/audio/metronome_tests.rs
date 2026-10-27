@@ -105,3 +105,23 @@ fn beat_one_is_accented_and_the_bar_follows_the_time_signature() {
     );
     assert_eq!(metronome.bar_frames(), (3 * BEAT) as f64);
 }
+
+#[test]
+fn an_empty_loop_clicks_on_its_own_count() {
+    // Not at "the top" of every block, which a zero-length loop is.
+    let mut metronome = Metronome::new(RATE, 120, 4);
+    let mut out = vec![0.0; BEAT * 2 + 2_000];
+    for block in out.chunks_mut(BLOCK) {
+        metronome.add_on_loop(block, 0, 0);
+    }
+    assert_eq!(onsets(&out), vec![0, BEAT, 2 * BEAT]);
+}
+
+#[test]
+fn a_tempo_that_is_not_one_is_ignored() {
+    let mut metronome = Metronome::new(RATE, 120, 4);
+    for bpm in [0.0, -60.0, f64::NAN, f64::INFINITY] {
+        metronome.set_bpm(bpm);
+    }
+    assert_eq!(metronome.bar_frames(), (4 * BEAT) as f64, "still 120");
+}

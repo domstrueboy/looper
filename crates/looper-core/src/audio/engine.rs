@@ -759,6 +759,11 @@ pub fn build_looper_streams(
     // below is sized in samples, and a device that handed back another
     // rate would leave every one of those sizes wrong.
     let format = open.format();
+    // Checked here, off the audio thread: a zero stride would panic the
+    // callbacks' chunking.
+    if format.output_channels == 0 {
+        return Err("the output device has no channels".to_string());
+    }
     if settings.input_channel >= format.input_channels {
         return Err(format!(
             "input channel {} is out of range (device has {} channel(s))",
