@@ -193,6 +193,15 @@ on a laptop with no ASIO
 driver, and Bluetooth headphones - to see how bad it is and word the
 warning from that.
 
+- **10a. Controls - done.** The skeleton (what's needed, starting
+  clean, a findings table), then every setting and every control on
+  both screens, one row each: what to do, what should happen.
+- **10b. Cycles.** Each record mode, record start and stop mode through
+  its full cycle; what survives a restart and a trip to Settings.
+- **10c. Hardware.** The by-ear pass, owed twice; an interface
+  unplugged mid-loop; a USB foot pedal's keys; WASAPI with no ASIO;
+  Bluetooth headphones. Findings feed step 11.
+
 ### 11. Release 0.2
 
 - **License:** the `LICENSE` file and fields - see *Open decisions*.
