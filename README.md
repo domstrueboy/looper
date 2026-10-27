@@ -704,16 +704,20 @@ audio thread still has a take open (`take_open`, published last), since
 until its end arrives the copy and the stack disagree on which layer is
 last.
 
-Takes are stored as they were played - where each began, and the samples
-- and only laid out into full-length layers when saving, so the copy
-costs about what was recorded rather than a second full-size stack. Two
-consequences worth knowing:
+A dub is folded onto one loop length as its samples arrive - the first
+pass over a position replaces, later ones sum - so however long anyone
+dubs, the copy is never more than a second stack's worth; only putting
+the dub's start back is left for saving. Samples drained in the same
+frame as a take's end could belong to the next take, so only those from
+earlier frames are folded: a take that ended before them would have
+reported it by now. A first take has no length to fold onto, and is
+kept as played - bounded by the stack's capacity, since only what the
+stack kept is passed on. Two consequences worth knowing:
 
 - **The overdub layout rule exists twice**: the audio thread applies it
-  sample by sample as it plays, the mirror applies it to a whole take at
-  once. A test asserts the two agree, because drift between them would
-  mean a loop that reloads sounding different from the one that was
-  played.
+  sample by sample as it plays, the mirror as the samples reach it. A
+  test asserts the two agree, because drift between them would mean a
+  loop that reloads sounding different from the one that was played.
 - **If samples ever go missing** on the way to the copy (its ring
   overflowing because the UI stalled), the save is skipped rather than
   writing a loop that doesn't match what was heard. The count comes back

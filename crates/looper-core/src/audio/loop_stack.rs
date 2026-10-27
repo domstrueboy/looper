@@ -168,17 +168,18 @@ impl LoopStack {
     }
 
     /// Appends to the first layer, stopping at capacity - a take that
-    /// reaches `max_loop_secs` stops growing rather than wrapping. How
-    /// much has landed is `recorded_len`.
-    pub fn record_first_layer(&mut self, input: &[f32]) {
+    /// reaches `max_loop_secs` stops growing rather than wrapping.
+    /// Returns how much of `input` landed, from its start.
+    pub fn record_first_layer(&mut self, input: &[f32]) -> usize {
         let Some(index) = self.recording else {
-            return;
+            return 0;
         };
         let capacity = self.capacity();
         let layer = &mut self.layers[index];
         let n = input.len().min(capacity - layer.written);
         layer.samples[layer.written..layer.written + n].copy_from_slice(&input[..n]);
         layer.written += n;
+        n
     }
 
     /// Fixes the loop length at whatever was recorded and rewinds to the

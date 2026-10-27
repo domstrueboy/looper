@@ -275,9 +275,11 @@ impl OutputPath {
             match state {
                 LoopState::Recording => {
                     let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
-                    self.stack.record_first_layer(&self.recorded[..n]);
+                    // Only what the stack kept: past its capacity the
+                    // copy would grow on with audio nobody will hear.
+                    let kept = self.stack.record_first_layer(&self.recorded[..n]);
                     self.take_samples +=
-                        pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
+                        pass_on(&mut self.capture, &self.control, &self.recorded[..kept]);
                 }
                 LoopState::Arming => {
                     // Drained whether or not any of it is kept, so it
@@ -303,15 +305,16 @@ impl OutputPath {
                             self.stack.begin_first_layer();
                             if self.record_start == RecordStart::Detect {
                                 for part in self.detector.before() {
-                                    self.stack.record_first_layer(part);
+                                    let kept = self.stack.record_first_layer(part);
                                     self.take_samples +=
-                                        pass_on(&mut self.capture, &self.control, part);
+                                        pass_on(&mut self.capture, &self.control, &part[..kept]);
                                 }
                             }
                         }
                         let take = &self.recorded[from.min(n)..n];
-                        self.stack.record_first_layer(take);
-                        self.take_samples += pass_on(&mut self.capture, &self.control, take);
+                        let kept = self.stack.record_first_layer(take);
+                        self.take_samples +=
+                            pass_on(&mut self.capture, &self.control, &take[..kept]);
                     }
                 }
                 LoopState::Looping | LoopState::Overdubbing => {

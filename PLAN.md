@@ -194,11 +194,10 @@ in the order they're fixed:
   frame. Now only what changed is written, on `loop_writer.rs`'s thread,
   which also takes the tempo and the clear's delete so they stay in
   order.
-- **9c. The copy grows without bound during a dub.** `LoopMirror` keeps
-  a take as played, so a five-minute dub over an 8 s loop holds five
-  minutes of samples rather than one layer's worth. Fold each pass into
-  a loop-length buffer as it arrives, which makes "held twice" true;
-  then say so in Settings, whose "Reserves N MB" counts the stack only.
+- **9c. The copy bounded - done.** `LoopMirror` kept a dub as played,
+  so a long one held every pass. Now a dub folds onto one loop length
+  as it arrives, a first take holds only what the stack kept, and
+  Settings says the copy can take as much memory again.
 - **9d. Real-time edges.** Looping with an empty stack (a take that got
   no input, e.g. a dead capture end) makes `add_on_loop` retrigger the
   click at the top of every block - a buzz. And `set_bpm` builds a

@@ -226,6 +226,34 @@ fn the_mirror_is_fed_exactly_what_the_stack_records() {
     assert_eq!(mirrored[..m], expected);
 }
 
+#[test]
+fn the_mirror_gets_nothing_past_the_stacks_capacity() {
+    // A take run past `max_loop_secs` stops growing in the stack; the
+    // copy mustn't go on growing without it.
+    let settings = AppConfig {
+        max_loop_secs: 10,
+        ..test_settings()
+    };
+    let capacity = 10 * TEST_RATE as usize;
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
+    let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+
+    control.publish_state(LoopState::Recording);
+    let mut next = 1.0;
+    let mut mirrored = 0;
+    let mut drained = [0.0f32; BLOCK];
+    for _ in 0..(capacity + 10 * BLOCK) / BLOCK {
+        drive(&mut path, &ramp(&mut next));
+        mirrored += captured.samples.pop_slice(&mut drained);
+    }
+
+    assert_eq!(path.output.stack.recorded_len(), capacity);
+    assert_eq!(mirrored, capacity, "the stack's worth, and no more");
+}
+
 /// A count-in opens the take on the bar line to the sample - here
 /// mid-block, where the UI thread's frame clock would have landed it
 /// anywhere. With the metronome off: the count-in clicks regardless.

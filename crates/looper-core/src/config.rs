@@ -346,7 +346,8 @@ impl AppConfig {
 
     /// Memory the loop layers will take at `sample_rate`, in bytes: every
     /// layer is pre-allocated at the full loop length, so this is the
-    /// price of the two settings that decide it.
+    /// price of the two settings that decide it. The UI thread's copy,
+    /// kept for saving, is never more than this again.
     pub fn loop_memory_bytes(&self) -> u64 {
         u64::from(self.max_loop_secs)
             * u64::from(self.max_layers)

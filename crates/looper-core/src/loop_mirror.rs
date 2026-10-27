@@ -15,9 +15,10 @@ const MAX_SAVED_LAYERS: usize = 16;
 
 const TEMPO_FILE: &str = "tempo.toml";
 
-/// One recorded take: where in the loop it began, and what was played.
-/// Saved layers come back in this shape too, already laid out from
-/// position zero.
+/// One recorded take: where in the loop it began, and what it left. A
+/// first take as played, a dub folded onto one loop length from its own
+/// start - see `fold_pending`. Saved layers come back in this shape too,
+/// already laid out from position zero.
 struct Take {
     start: usize,
     samples: Vec<f32>,
@@ -55,14 +56,23 @@ pub struct Capture {
 /// Fed by the audio thread with exactly what the stack recorded, and told
 /// by it where each take ended - not by this thread's own state changes,
 /// which reach the stack a callback later, and sometimes not at all. A
-/// take is stored as played and only laid out into a layer when saving,
-/// so this costs about what was actually recorded rather than a second
-/// full-size stack.
+/// dub is folded onto the loop as it arrives, so the copy is never more
+/// than a second stack's worth, however long anyone dubs.
 pub struct LoopMirror {
     capture: Capture,
-    /// Samples arrived but not yet claimed by an ended take: the one
-    /// still being recorded.
+    /// Samples arrived but not yet known to be the open take's: the
+    /// latest drain's, which may run past a take whose end is still on
+    /// its way.
     pending: Vec<f32>,
+    /// How many of `pending`, from the front, came before the latest
+    /// drain. A take that ended before them would have reported it by
+    /// now, so once this frame's ends are settled they're the open
+    /// take's, and fold into it.
+    older: usize,
+    /// The take still open, as far as it's known: folded, for a dub.
+    open: Vec<f32>,
+    /// How many samples have gone into `open`, folded or not.
+    open_received: usize,
     previous_state: LoopState,
     /// Shared rather than owned, so a save can hand them to the writer
     /// thread without copying - a finished take never changes.
@@ -91,6 +101,9 @@ impl LoopMirror {
         Self {
             capture,
             pending: Vec::new(),
+            older: 0,
+            open: Vec::new(),
+            open_received: 0,
             previous_state: LoopState::Idle,
             finished: restored
                 .into_iter()
@@ -120,6 +133,7 @@ impl LoopMirror {
         while let Some(end) = self.capture.ends.try_pop() {
             ends.push(end);
         }
+        self.older = self.pending.len();
         let mut scratch = [0.0f32; 4096];
         loop {
             let n = self.capture.samples.pop_slice(&mut scratch);
@@ -137,8 +151,9 @@ impl LoopMirror {
             self.removed.clear();
             if state == LoopState::Recording {
                 // A new loop: whatever went missing from the old one no
-                // longer matters.
+                // longer matters, and its length isn't one to fold onto.
                 self.lost_samples = false;
+                self.loop_len = 0;
             }
         }
         self.previous_state = state;
@@ -147,6 +162,7 @@ impl LoopMirror {
         for end in ends {
             out_of_date |= self.end_take(end);
         }
+        self.fold_pending(self.older);
         out_of_date
     }
 
@@ -201,8 +217,32 @@ impl LoopMirror {
 
     /// The next `samples` arrived, as one take's.
     fn claim(&mut self, samples: usize) -> Vec<f32> {
-        let rest = self.pending.split_off(samples.min(self.pending.len()));
-        std::mem::replace(&mut self.pending, rest)
+        let arrived = samples
+            .saturating_sub(self.open_received)
+            .min(self.pending.len());
+        self.fold_pending(arrived);
+        self.open_received = 0;
+        std::mem::take(&mut self.open)
+    }
+
+    /// Moves the first `count` samples waiting into the open take. A
+    /// dub's fold onto one loop length as they come - the first pass
+    /// over a position replaces, later ones sum, the rule the layer stack
+    /// applies while dubbing - so a long one costs a layer, not every
+    /// pass played. A first take has no length to fold onto yet, and is
+    /// kept as played: the stack's capacity bounds it.
+    fn fold_pending(&mut self, count: usize) {
+        let len = self.loop_len;
+        for &sample in &self.pending[..count] {
+            if len == 0 || self.open_received < len {
+                self.open.push(sample);
+            } else if let Some(slot) = self.open.get_mut(self.open_received % len) {
+                *slot += sample;
+            }
+            self.open_received += 1;
+        }
+        self.pending.drain(..count);
+        self.older = self.older.saturating_sub(count);
     }
 
     pub fn remove_last_layer(&mut self) {
@@ -294,26 +334,17 @@ impl Save {
 /// take rounded down to the bar is the case that has any. Short of the
 /// length, the rest is silence.
 ///
-/// Any other take wraps. The first pass over a position replaces what's
-/// there and later passes sum into it - the same rule the layer stack
-/// applies while overdubbing, so a loop plays back the way it sounded.
+/// Any other take is already folded onto the loop from its own start;
+/// all that's left is to put that start back.
 fn lay_out(take: &Take, index: usize, loop_len: usize) -> Vec<f32> {
     let mut layer = vec![0.0f32; loop_len];
+    let n = take.samples.len().min(loop_len);
     if index == 0 {
-        let n = take.samples.len().min(loop_len);
         layer[..n].copy_from_slice(&take.samples[..n]);
         return layer;
     }
-    if loop_len == 0 {
-        return layer;
-    }
-    for (i, &sample) in take.samples.iter().enumerate() {
-        let at = (take.start + i) % loop_len;
-        layer[at] = if i < loop_len {
-            sample
-        } else {
-            layer[at] + sample
-        };
+    for (i, &sample) in take.samples[..n].iter().enumerate() {
+        layer[(take.start + i) % loop_len] = sample;
     }
     layer
 }

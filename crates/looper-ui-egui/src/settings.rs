@@ -288,10 +288,12 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     );
     ui.add(egui::Slider::new(&mut settings.config.max_layers, MAX_LAYERS_RANGE).text("Max layers"));
     // Every layer is pre-allocated at the full loop length, so these two
-    // settings have a price worth seeing before it's paid.
+    // settings have a price worth seeing before it's paid. The copy kept
+    // for saving grows to as much again as the layers fill.
+    let reserved_mb = settings.config.loop_memory_bytes() / (1024 * 1024);
     ui.label(format!(
-        "Reserves {} MB of memory",
-        settings.config.loop_memory_bytes() / (1024 * 1024)
+        "Reserves {reserved_mb} MB of memory, up to {} MB with every layer recorded",
+        2 * reserved_mb
     ));
 
     true

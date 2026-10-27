@@ -292,6 +292,70 @@ fn removing_and_clearing_follow_the_stack() {
 }
 
 #[test]
+fn a_long_dub_holds_one_loop_length_while_it_runs() {
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &[0.0; 4],
+        4,
+        0,
+    );
+
+    // Ten passes, a frame each, with no end yet.
+    mirror.tick(LoopState::Overdubbing);
+    for _ in 0..10 {
+        input.samples.push_slice(&s(&[1, 1, 1, 1]));
+        mirror.tick(LoopState::Overdubbing);
+    }
+    mirror.tick(LoopState::Overdubbing);
+    assert_eq!(mirror.open.len(), 4, "one loop length, folded");
+    assert_eq!(mirror.pending.len(), 0);
+
+    input.end(TakeEnd::Overdub {
+        samples: 40,
+        start: 1,
+    });
+    mirror.tick(LoopState::Looping);
+
+    assert_eq!(mirror.layers()[1], s(&[10, 10, 10, 10]));
+}
+
+#[test]
+fn the_next_takes_samples_wait_for_the_end_before_them() {
+    // The next take's samples drained before the end of the one before
+    // them is read: kept apart until it is, not folded into that one.
+    let (mut input, mut mirror) = new_mirror();
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &[0.0; 2],
+        2,
+        0,
+    );
+    mirror.tick(LoopState::Overdubbing);
+    input.samples.push_slice(&s(&[1, 2, 3]));
+    input.samples.push_slice(&s(&[4, 5]));
+    mirror.tick(LoopState::Overdubbing);
+
+    input.end(TakeEnd::Overdub {
+        samples: 3,
+        start: 0,
+    });
+    mirror.tick(LoopState::Overdubbing);
+    input.end(TakeEnd::Overdub {
+        samples: 2,
+        start: 0,
+    });
+    mirror.tick(LoopState::Looping);
+
+    assert_eq!(mirror.layers()[1], s(&[4, 2]), "3 came back round onto 1");
+    assert_eq!(mirror.layers()[2], s(&[4, 5]));
+}
+
+#[test]
 fn takes_split_where_the_audio_thread_says() {
     // Not where this thread changed state: the audio thread goes on
     // recording until it sees the change, so the next take's samples can
