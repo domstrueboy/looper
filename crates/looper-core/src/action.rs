@@ -10,6 +10,8 @@ use crate::config::AppConfig;
 pub enum Action {
     Start(AppConfig),
     OpenSettings,
+    /// The settings form's values, changed: for `SettingsState::edit`.
+    EditSettings(AppConfig),
     /// One of the looper screen's own controls, for `LooperState::act`.
     Looper(LooperAction),
 }

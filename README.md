@@ -190,7 +190,7 @@ flowchart TB
     MAIN -->|"tick(space, now)"| LOOPER
     UIL --> UII
     UIL -->|"Action, LooperAction"| APP
-    UIS -->|"Action::Start"| APP
+    UIS -->|"Action::Start, EditSettings"| APP
     APP --> LOOPER
     APP --> SET
     LOOPER --> SM
@@ -230,12 +230,16 @@ Three asymmetries the picture makes plain, and the prose above hides:
   handful of atomics. Audio to UI is those, plus a whole stream of
   samples through the capture ring, which is why the UI thread's copy
   of the loop exists at all.
-- **`ui-egui/` is a leaf.** The looper screen takes `&LooperState` and
-  returns what was asked of it - `Action::Looper(LooperAction)` for its
-  own controls, the button latches included - and the shell applies
-  them after the frame is drawn, through `LooperState::act`. Swapping
-  GUI library means replacing that crate and `main.rs`'s shell, and
-  nothing below them.
+- **`ui-egui/` is a leaf.** Each screen takes its state by `&` and
+  returns what was asked of it, which the shell applies after the frame
+  is drawn. The looper screen returns `Action::Looper(LooperAction)`
+  for its own controls, the button latches included, carried out by
+  `LooperState::act`. The settings screen draws into a copy of the
+  choice and returns it as `Action::EditSettings` if it changed;
+  `SettingsState::edit` decides what that asks of the backends - a new
+  driver's devices, a new device's rates - so dragging a slider never
+  enumerates. Swapping GUI library means replacing that crate and
+  `main.rs`'s shell, and nothing below them.
 
 The files themselves:
 

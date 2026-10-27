@@ -18,7 +18,7 @@ Dependency: app → ui → core → hal. Neither ui nor core depends on the othe
 **Hard boundaries** — never cross:
 - `egui::` types only in `looper-app` and `looper-ui-egui`
 - `cpal` types only in `looper-hal`
-- UI crate is a leaf: `render(ui, model) -> Option<Action>`. Never writes actions back.
+- UI crate is a leaf: `render(ui, &model) -> Vec<Action>`. Never writes actions back.
 - HAL knows about devices, never about loops/layers/takes.
 
 ## Conventions

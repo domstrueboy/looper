@@ -18,11 +18,7 @@ use looper_hal::{Backends, cpal_backend::default_backends};
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let actions: Vec<Action> = match &mut self.screen {
-            Screen::Settings(settings) => {
-                looper_ui_egui::settings::render(ui, settings, &self.backends)
-                    .into_iter()
-                    .collect()
-            }
+            Screen::Settings(settings) => looper_ui_egui::settings::render(ui, settings),
             Screen::Looper(looper) => {
                 // Long-press detection and the pre-roll countdown need
                 // continuous frames, not just input-triggered repaints.

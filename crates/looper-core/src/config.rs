@@ -107,7 +107,7 @@ const LOOP_DIR: &str = "loop";
 /// back to the settings screen. The two that identify the device don't:
 /// without them there's nothing to open, so such a file counts as no
 /// config at all.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppConfig {
     /// The input device, and on a duplex backend the output one too.
     /// Named as it always was, so files written before there were two

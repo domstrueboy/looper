@@ -218,10 +218,7 @@ in the order they're fixed:
 - **9h. The looper screen a leaf - done.** `render` takes
   `&LooperState` and returns `Action::Looper(LooperAction)` for every
   control it has, the button latches included; the shell applies them
-  through `LooperState::act`. Still open: the Settings screen edits its
-  `SettingsState` draft in place and calls `refresh_*` (device
-  enumeration) from inside `render` - the same rule, if it's to hold
-  there too.
+  through `LooperState::act`.
 - **9i. Tests - done.** `temp_dir` was written four times; it's one
   test-only `test_support.rs` now. The other same-named helpers
   (`settings`, `start`) do different jobs and stay apart.
@@ -231,6 +228,10 @@ in the order they're fixed:
   clears; "the overdub control"; Arming "treated like Idle"),
   `looper-ui-egui`'s "`egui` nowhere else", `main.rs`'s `ui/`. The user
   guide read against the app. The screenshot needs retaking by hand.
+- **9k. The settings screen a leaf - done.** Its widgets edit a copy of
+  the choice, returned as `Action::EditSettings` if it changed;
+  `SettingsState::edit` re-asks the backends only when the driver or a
+  device changed, where `render` used to enumerate itself.
 
 ### 10. Manual test plan
 

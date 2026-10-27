@@ -1,21 +1,22 @@
 use looper_core::action::Action;
+use looper_core::config::AppConfig;
 use looper_core::config::{
     DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE,
     MAX_LOOP_SECS_RANGE, METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode,
     TimeSignature,
 };
 use looper_core::settings::SettingsState;
-use looper_hal::Backends;
 
 /// Reserved below the scrolling list so Start is always reachable.
 const START_ROW_HEIGHT: f32 = 40.0;
 
-pub fn render(
-    ui: &mut egui::Ui,
-    settings: &mut SettingsState,
-    backends: &Backends,
-) -> Option<Action> {
-    let mut action = None;
+/// Reads the settings and says what was asked of them - a leaf, like the
+/// looper screen. The widgets edit a copy of the choice; a copy that
+/// changed goes back as `EditSettings`, and the app decides what that
+/// means for the device lists.
+pub fn render(ui: &mut egui::Ui, settings: &SettingsState) -> Vec<Action> {
+    let mut actions = Vec::new();
+    let mut draft = settings.config.clone();
 
     egui::Frame::default()
         .inner_margin(egui::Margin::same(16))
@@ -36,7 +37,7 @@ pub fn render(
             // and their section labels wandered with each line's width.
             let can_start = egui::ScrollArea::vertical()
                 .max_height((ui.available_height() - START_ROW_HEIGHT).max(120.0))
-                .show(ui, |ui| controls(ui, settings, backends))
+                .show(ui, |ui| controls(ui, settings, &mut draft))
                 .inner;
 
             if !can_start {
@@ -49,18 +50,22 @@ pub fn render(
                     .add_sized([140.0, 26.0], egui::Button::new("Start"))
                     .clicked()
                 {
-                    action = Some(Action::Start(settings.config.clone()));
+                    // What's on screen, edits this frame included.
+                    actions.push(Action::Start(draft.clone()));
                 }
             });
         });
 
-    action
+    if draft != settings.config {
+        actions.push(Action::EditSettings(draft));
+    }
+    actions
 }
 
 /// The pickers and sliders. Returns whether there's a startable choice:
 /// a device that reports no usable rate or no inputs can't be opened, and
 /// says so instead of offering Start.
-fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends) -> bool {
+fn controls(ui: &mut egui::Ui, settings: &SettingsState, draft: &mut AppConfig) -> bool {
     if settings.backends.is_empty() {
         ui.colored_label(egui::Color32::RED, "No audio backends in this build.");
         return false;
@@ -69,27 +74,19 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     // Only worth choosing when there is a choice - one backend picks
     // itself, and a row saying so is a row in the way.
     if settings.backends.len() > 1 {
-        let previous = settings.config.backend.clone();
         let selected = settings
             .backends
             .iter()
-            .find(|backend| backend.id == settings.config.backend)
+            .find(|backend| backend.id == draft.backend)
             .map(|backend| backend.label.clone())
             .unwrap_or_default();
         egui::ComboBox::from_label("Driver")
             .selected_text(selected)
             .show_ui(ui, |ui| {
                 for backend in &settings.backends {
-                    ui.selectable_value(
-                        &mut settings.config.backend,
-                        backend.id.clone(),
-                        &backend.label,
-                    );
+                    ui.selectable_value(&mut draft.backend, backend.id.clone(), &backend.label);
                 }
             });
-        if settings.config.backend != previous {
-            settings.refresh_for_selected_backend(backends);
-        }
     }
 
     if settings.inputs.is_empty() {
@@ -97,26 +94,22 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
         return false;
     }
 
-    let previous_device = settings.config.device_name.clone();
     // "Device" while one does both, "Input" once they are separate -
     // naming it Input when there is nothing else to pick reads as though
     // an output picker had gone missing.
     egui::ComboBox::from_label(if settings.duplex { "Device" } else { "Input" })
-        .selected_text(settings.config.device_name.clone())
+        .selected_text(draft.device_name.clone())
         .show_ui(ui, |ui| {
             for name in &settings.inputs {
-                ui.selectable_value(&mut settings.config.device_name, name.clone(), name);
+                ui.selectable_value(&mut draft.device_name, name.clone(), name);
             }
         });
-    if settings.config.device_name != previous_device {
-        settings.refresh_for_selected_device(backends);
-    }
 
     // A backend whose devices are single endpoints needs both ends
     // naming. Left out entirely when one device does both, rather than
     // shown greyed: there is nothing there to choose.
     if !settings.duplex {
-        let previous_output = settings.config.output_device().to_string();
+        let previous_output = draft.output_device().to_string();
         let mut chosen = previous_output.clone();
         egui::ComboBox::from_label("Output")
             .selected_text(chosen.clone())
@@ -126,8 +119,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
                 }
             });
         if chosen != previous_output {
-            settings.config.output_device_name = Some(chosen);
-            settings.refresh_for_selected_device(backends);
+            draft.output_device_name = Some(chosen);
         }
 
         // Measured rather than guessed: against ASIO's one callback
@@ -145,10 +137,10 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     }
 
     egui::ComboBox::from_label("Sample rate")
-        .selected_text(format!("{} Hz", settings.config.sample_rate))
+        .selected_text(format!("{} Hz", draft.sample_rate))
         .show_ui(ui, |ui| {
             for &rate in &settings.sample_rates {
-                ui.selectable_value(&mut settings.config.sample_rate, rate, format!("{rate} Hz"));
+                ui.selectable_value(&mut draft.sample_rate, rate, format!("{rate} Hz"));
             }
         });
 
@@ -158,11 +150,11 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     }
 
     egui::ComboBox::from_label("Input channel")
-        .selected_text(format!("Input {}", settings.config.input_channel + 1))
+        .selected_text(format!("Input {}", draft.input_channel + 1))
         .show_ui(ui, |ui| {
             for channel in 0..settings.input_channels {
                 ui.selectable_value(
-                    &mut settings.config.input_channel,
+                    &mut draft.input_channel,
                     channel,
                     format!("Input {}", channel + 1),
                 );
@@ -177,7 +169,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     // does something.
     ui.label("Record start");
     ui.indent("record_start", |ui| {
-        let config = &mut settings.config;
+        let config = &mut *draft;
         ui.radio_value(&mut config.record_start, RecordStart::Instant, "Instant")
             .on_hover_text("Recording starts as Space goes down");
         ui.radio_value(&mut config.record_start, RecordStart::Delay, "Delay")
@@ -217,7 +209,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     });
     ui.label("Stop");
     ui.indent("stop_mode", |ui| {
-        let config = &mut settings.config;
+        let config = &mut *draft;
         ui.radio_value(&mut config.stop_mode, StopMode::Immediate, "Immediately")
             .on_hover_text("The loop goes silent the moment you stop it");
         ui.radio_value(&mut config.stop_mode, StopMode::LoopEnd, "At the loop end")
@@ -234,19 +226,19 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
         }
     });
     ui.add(
-        egui::Slider::new(&mut settings.config.long_press_ms, LONG_PRESS_MS_RANGE)
+        egui::Slider::new(&mut draft.long_press_ms, LONG_PRESS_MS_RANGE)
             .step_by(250.0)
             .text("Hold to undo / clear")
             .custom_formatter(|ms, _| format!("{:.2} s", ms / 1000.0)),
     );
     ui.add(
-        egui::Slider::new(&mut settings.config.metronome_bpm, METRONOME_BPM_RANGE)
+        egui::Slider::new(&mut draft.metronome_bpm, METRONOME_BPM_RANGE)
             .text("Metronome")
             .suffix(" BPM"),
     );
     ui.horizontal(|ui| {
         ui.label("Time signature");
-        let signature = &mut settings.config.time_signature;
+        let signature = &mut draft.time_signature;
         ui.radio_value(signature, TimeSignature::FourFour, "4/4");
         ui.radio_value(signature, TimeSignature::ThreeFour, "3/4");
         ui.radio_value(signature, TimeSignature::SixEight, "6/8")
@@ -257,7 +249,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     // One under another: three side by side don't fit the window.
     ui.label("Record mode");
     ui.indent("record_mode", |ui| {
-        let mode = &mut settings.config.record_mode;
+        let mode = &mut draft.record_mode;
         ui.radio_value(mode, RecordMode::RecPlay, "REC > PLAY")
             .on_hover_text("The take plays; Space then dubs and plays in turn");
         ui.radio_value(mode, RecordMode::RecDub, "REC > DUB")
@@ -274,21 +266,21 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     ui.separator();
 
     ui.add(
-        egui::Slider::new(&mut settings.config.latency_ms, LATENCY_MS_RANGE)
+        egui::Slider::new(&mut draft.latency_ms, LATENCY_MS_RANGE)
             .text("Latency")
             .suffix(" ms"),
     );
     ui.add(
-        egui::Slider::new(&mut settings.config.max_loop_secs, MAX_LOOP_SECS_RANGE)
+        egui::Slider::new(&mut draft.max_loop_secs, MAX_LOOP_SECS_RANGE)
             .step_by(10.0)
             .text("Max loop length")
             .suffix(" s"),
     );
-    ui.add(egui::Slider::new(&mut settings.config.max_layers, MAX_LAYERS_RANGE).text("Max layers"));
+    ui.add(egui::Slider::new(&mut draft.max_layers, MAX_LAYERS_RANGE).text("Max layers"));
     // Every layer is pre-allocated at the full loop length, so these two
     // settings have a price worth seeing before it's paid. The copy kept
     // for saving grows to as much again as the layers fill.
-    let reserved_mb = settings.config.loop_memory_bytes() / (1024 * 1024);
+    let reserved_mb = draft.loop_memory_bytes() / (1024 * 1024);
     ui.label(format!(
         "Reserves {reserved_mb} MB of memory, up to {} MB with every layer recorded",
         2 * reserved_mb

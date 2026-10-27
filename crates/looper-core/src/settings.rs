@@ -79,6 +79,22 @@ impl SettingsState {
         self.refresh_for_selected_backend(backends);
     }
 
+    /// Takes the form's new values, and asks again only for what a
+    /// changed choice decides: a backend, its devices; a device, its
+    /// rates and channels. Nothing else enumerates - a slider dragged
+    /// doesn't load a driver.
+    pub fn edit(&mut self, config: AppConfig, backends: &Backends) {
+        let backend_changed = config.backend != self.config.backend;
+        let device_changed = config.device_name != self.config.device_name
+            || config.output_device_name != self.config.output_device_name;
+        self.config = config;
+        if backend_changed {
+            self.refresh_for_selected_backend(backends);
+        } else if device_changed {
+            self.refresh_for_selected_device(backends);
+        }
+    }
+
     /// Device lists are per-backend, so changing backend re-queries them.
     pub fn refresh_for_selected_backend(&mut self, backends: &Backends) {
         let devices = backends

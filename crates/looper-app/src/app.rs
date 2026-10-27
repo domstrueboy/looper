@@ -40,6 +40,11 @@ impl App {
         match action {
             Action::Start(config) => self.start_looper(config),
             Action::OpenSettings => self.open_settings(None),
+            Action::EditSettings(config) => {
+                if let Screen::Settings(settings) = &mut self.screen {
+                    settings.edit(config, &self.backends);
+                }
+            }
             // Only the looper screen asks; the screen it asked from may
             // have gone already, if Settings opened in the same frame.
             Action::Looper(action) => {

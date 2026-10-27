@@ -125,3 +125,61 @@ fn switching_to_a_split_backend_stops_claiming_one_device_does_both() {
         engine::resolve_devices(&split, &settings.config).expect("an output is resolvable");
     assert_eq!(output.direction, Direction::Output);
 }
+
+#[test]
+fn editing_the_backend_asks_it_for_its_devices() {
+    // What picking a driver does now the screen only hands back the form.
+    let mut settings = refreshed(&duplex_backends());
+    let split = split_backends();
+    let edited = AppConfig {
+        backend: "mock".to_string(),
+        ..settings.config.clone()
+    };
+    settings.config.backend = "other".to_string();
+
+    settings.edit(edited, &split);
+
+    assert!(
+        !settings.duplex,
+        "the split backend's lists, not the old ones"
+    );
+}
+
+#[test]
+fn editing_the_device_asks_it_for_its_rates() {
+    let backends = duplex_backends();
+    let mut settings = refreshed(&backends);
+    let edited = AppConfig {
+        device_name: "Some Interface That Went Away".to_string(),
+        ..settings.config.clone()
+    };
+
+    settings.edit(edited, &backends);
+
+    assert!(
+        settings.sample_rates.is_empty(),
+        "a device that isn't there offers none"
+    );
+    assert_eq!(settings.input_channels, 0);
+}
+
+#[test]
+fn editing_anything_else_asks_nothing() {
+    // A slider dragged mustn't load a driver every frame.
+    let backends = duplex_backends();
+    let mut settings = refreshed(&backends);
+    settings.sample_rates = vec![1];
+    let edited = AppConfig {
+        latency_ms: 20,
+        ..settings.config.clone()
+    };
+
+    settings.edit(edited, &backends);
+
+    assert_eq!(settings.config.latency_ms, 20);
+    assert_eq!(
+        settings.sample_rates,
+        vec![1],
+        "the lists left as they were"
+    );
+}
