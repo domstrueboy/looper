@@ -75,6 +75,75 @@ Switch to **Extended** with a loop of three layers recorded.
 |---|---|---|---|
 | E1 | Play, then mute and unmute a layer by its button and by its number key | It goes silent and comes back; the others play on throughout | |
 
+## 4. Record start
+
+From **Empty** each time (hold S), changing **Record start** in Settings
+between rows. Metronome off unless the row says.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| R1 | **Instant**: play a note exactly as you press Space | The note is at the very start of the loop - nothing before it lost | |
+| R2 | **Delay** (4 s): press Space | Blue pulsing **Get ready**, the seconds counting down over a filling gray bar, button **✖**; recording starts as the bar fills | |
+| R3 | **Delay**: press Space, then Space again before it runs out; again with S | Either one calls it off: **Empty**, nothing recorded | |
+| R4 | **Count-in**, 4/4: press Space | One bar of clicks - four, beat one higher - even with the metronome off; recording starts on the next beat one. Play on that beat and it's the top of the loop | |
+| R5 | **Count-in**, 3/4 | Three clicks, not four | |
+| R6 | **When you play**: press Space, wait, then play | **Play to start**, no countdown, as long as you wait; recording starts with your first note, its attack intact at the top of the loop | |
+| R7 | **When you play**: press Space and don't play | Hum and string noise don't start it at the default **Start level**; if they do, note the level that stops it | |
+
+## 5. Ending the first take, with the metronome on
+
+Record start **Instant**, metronome on, 120 BPM: a bar is 2 seconds.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| B1 | Record, and end the take just after a bar line | The loop is cut back to that bar line; the click lands on the top of the loop every pass | |
+| B2 | Record, and end it more than half way into a bar | **Recording to the bar line** until the next one; whatever you stop playing in that time stays silent in the loop | |
+| B3 | As B2, then press again while it waits | It stops right away; the rest of the bar is silent | |
+| B4 | Metronome off: record a loop of any length | The loop is exactly as long as you played it; the button shows its tempo to a tenth. Turn the click on: it fits the loop, beat one at the top | |
+
+## 6. Record modes
+
+Record start **Instant**. **Max layers** at its default, 8, unless the
+row says.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| M1 | **REC > PLAY**: press to end the take, press, press, then S while dubbing | Plays; dubs; plays again with the dub kept; S during a dub stops and keeps it | |
+| M2 | **REC > DUB**: press to end the take | Straight into a dub, no silent pass between: the take you just played plays back as you dub over it | |
+| M3 | **REC > DUB**, dubbing: press at the top of a pass | **Layers** goes up by one and the next dub starts at once - nothing missed at the join | |
+| M4 | **REC > DUB**, dubbing: S, then S | Keeps the layer and plays; then stops | |
+| M5 | **REC > DUB**, **Max layers** 3: dub until the last layer is recording | The round button turns from **⏺** to **▶**, and the next press plays rather than dubs | |
+| M6 | **REC > DUB, a layer per pass**: end the take, then keep playing for three passes with no press | **Layers** goes up each pass, a loop's length after the dub began - not at the top. A phrase played across the top of the loop stays in one layer | |
+| M7 | As M6, then hold Space | Only the last pass goes | |
+| M8 | As M6, with **Max layers** 3 | Once the last layer is reached, dubbing carries on into it rather than stopping | |
+| M9 | **A layer per pass**, dubbing: press | Keeps the layer and plays | |
+
+## 7. Stop modes
+
+A loop of two layers playing, **REC > PLAY**.
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| T1 | **Immediately**: S | Silent at once | |
+| T2 | **At the loop end**: S mid-loop | **Stopping at the loop end**, the button **Stop now (S)**; it plays to the end, then **Stopped**. The next Space starts from the top | |
+| T3 | **At the loop end**: S, then S again before the end | Stops right there | |
+| T4 | **At the loop end**: S, then Space before the end | It plays on, as if never stopped - and no dub opens | |
+| T5 | **Fade out** (3 s): S | **Fading out**: an even fade to silence over three seconds, no click at the end; then **Stopped** | |
+| T6 | **Fade out**: S, then Space part-way | It plays on, back at full level. Note whether the jump back is a click | |
+| T7 | **At the loop end**, dubbing: S | The dub is kept at once, then the loop plays to its end | |
+| T8 | Any stop mode, recording the first take: S | It stops at once - there's nothing to play out | |
+
+## 8. What's kept
+
+| ID | Do | Expect | ✓ |
+|---|---|---|---|
+| K1 | Record three layers, mute one (Extended), halve or double the tempo (whichever is lit); close the app; open it | The loop is back, **Stopped**, three layers, none muted, the tempo as you left it; Space plays it | |
+| K2 | **⚙**, change nothing, **Start** | The same loop back, **Stopped** | |
+| K3 | Record a dub, and end the app from Task Manager straight after | Reopened, the dub is there | |
+| K4 | With a loop saved: change **Sample rate**, **Start** | No loop - dropped, not played at the wrong speed | |
+| K5 | A loop of three layers saved: set **Max layers** to 2, **Start** | Two layers back; the third is dropped | |
+| K6 | **Undo**, close the app, open it | **Redo** is greyed: what undo dropped doesn't survive a restart | |
+
 ## Findings
 
 One line per row that didn't do what it says: the ID, what happened,

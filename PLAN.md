@@ -202,9 +202,9 @@ warning from that.
   asks for. The plan's sections 1-3 trimmed to what needs eyes, ears,
   real time or the real device. Snapshot tests not added: they need
   wgpu, which crashes on this machine's Intel UHD.
-- **10c. Cycles.** Each record mode, record start and stop mode through
-  its full cycle, by ear; what survives a restart and a trip to
-  Settings.
+- **10c. Cycles - done.** Every record start, the bar rounding, each
+  record mode and stop mode through its cycle, by ear; what a restart,
+  Settings and a killed app keep and drop.
 - **10d. Hardware.** The by-ear pass, owed twice; an interface
   unplugged mid-loop; a USB foot pedal's keys; WASAPI with no ASIO;
   Bluetooth headphones. Findings feed step 11.
