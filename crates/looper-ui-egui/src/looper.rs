@@ -1,4 +1,4 @@
-use looper_core::action::Action;
+use looper_core::action::{Action, LooperAction};
 use looper_core::config::{CLICK_VOLUME_PCT_RANGE, Mode, RecordMode, VOLUME_PCT_RANGE};
 
 use crate::indicator;
@@ -51,8 +51,10 @@ fn readout(looper: &LooperState) -> indicator::Readout {
     }
 }
 
-pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
-    let mut action = None;
+/// Reads the looper and says what was asked of it - a leaf: nothing here
+/// changes it. The shell applies the actions after the frame is drawn.
+pub fn render(ui: &mut egui::Ui, looper: &LooperState) -> Vec<Action> {
+    let mut actions = Vec::new();
     let (redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
         (
             // Edge-triggered, unlike the two pedals: neither has a
@@ -73,9 +75,9 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 ui.label("Looper Pedal");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.small_button("⚙").clicked() {
-                        action = Some(Action::OpenSettings);
+                        actions.push(Action::OpenSettings);
                     }
-                    mode_switch(ui, looper);
+                    mode_switch(ui, looper, &mut actions);
                 });
             });
             ui.add_space(8.0);
@@ -88,7 +90,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // Nothing here can reopen the device - the stream is
                 // gone - so point at the one place that can.
                 if ui.button("Choose a device").clicked() {
-                    action = Some(Action::OpenSettings);
+                    actions.push(Action::OpenSettings);
                 }
                 ui.add_space(8.0);
             }
@@ -119,10 +121,10 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 // `button_held` in `LooperState`. Read by the next
                 // frame's tick, which is what the latch is for.
                 if button_response.is_pointer_button_down_on() {
-                    looper.set_button_held(true);
+                    actions.push(Action::Looper(LooperAction::ButtonHeld(true)));
                 }
                 if !ui.input(|i| i.pointer.primary_down()) {
-                    looper.set_button_held(false);
+                    actions.push(Action::Looper(LooperAction::ButtonHeld(false)));
                 }
 
                 ui.add_space(4.0);
@@ -155,10 +157,10 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                             })
                             .inner;
                         if stop_response.is_pointer_button_down_on() {
-                            looper.set_stop_button_held(true);
+                            actions.push(Action::Looper(LooperAction::StopButtonHeld(true)));
                         }
                         if !ui.input(|i| i.pointer.primary_down()) {
-                            looper.set_stop_button_held(false);
+                            actions.push(Action::Looper(LooperAction::StopButtonHeld(false)));
                         }
 
                         let undo_clicked = ui
@@ -168,7 +170,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                             .inner
                             .clicked();
                         if undo_clicked {
-                            looper.remove_last_layer();
+                            actions.push(Action::Looper(LooperAction::Undo));
                         }
 
                         let redo_clicked = ui
@@ -178,13 +180,13 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                             .inner
                             .clicked();
                         if redo_clicked || redo_pressed {
-                            looper.redo_layer();
+                            actions.push(Action::Looper(LooperAction::Redo));
                         }
                     },
                 );
 
-                metronome_row(ui, looper, metronome_pressed);
-                levels(ui, looper);
+                metronome_row(ui, looper, metronome_pressed, &mut actions);
+                levels(ui, looper, &mut actions);
 
                 ui.colored_label(
                     egui::Color32::WHITE,
@@ -209,12 +211,12 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                 ui.label("M: metronome  |  , . : tempo  |  T: tap");
 
                 if looper.mode() == Mode::Extended {
-                    extended_area(ui, looper);
+                    extended_area(ui, looper, &mut actions);
                 }
             });
         });
 
-    action
+    actions
 }
 
 /// The metronome toggle, lit while on and naming its tempo, with a step
@@ -223,7 +225,12 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
 /// While a loop sets the tempo, the steps become halve and double: the
 /// tempo is fixed by the loop's length, and those are the only changes
 /// that keep the click on the loop's top.
-fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bool) {
+fn metronome_row(
+    ui: &mut egui::Ui,
+    looper: &LooperState,
+    toggle_pressed: bool,
+    actions: &mut Vec<Action>,
+) {
     // `,` and `.` sit under `<` and `>` on most layouts. Read as
     // presses, so holding one repeats.
     let (slower_pressed, faster_pressed, tap_pressed) = ui.ctx().input(|i| {
@@ -269,9 +276,9 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
                 .on_hover_text(hint);
             if slower.clicked() || (slower_pressed && enabled) {
                 if from_loop {
-                    looper.halve_tempo();
+                    actions.push(Action::Looper(LooperAction::HalveTempo));
                 } else {
-                    looper.change_metronome_bpm(-1);
+                    actions.push(Action::Looper(LooperAction::NudgeTempo(-1)));
                 }
             }
 
@@ -293,7 +300,7 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
                 toggle
             };
             if toggle.clicked() || toggle_pressed {
-                looper.toggle_metronome();
+                actions.push(Action::Looper(LooperAction::ToggleMetronome));
             }
 
             let (label, hint, enabled) = if from_loop {
@@ -309,9 +316,9 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
                 .on_hover_text(hint);
             if faster.clicked() || (faster_pressed && enabled) {
                 if from_loop {
-                    looper.double_tempo();
+                    actions.push(Action::Looper(LooperAction::DoubleTempo));
                 } else {
-                    looper.change_metronome_bpm(1);
+                    actions.push(Action::Looper(LooperAction::NudgeTempo(1)));
                 }
             }
 
@@ -326,7 +333,7 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
             let tap_down =
                 tap.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_pressed());
             if tap_down || (tap_pressed && !from_loop) {
-                looper.tap_tempo(Instant::now());
+                actions.push(Action::Looper(LooperAction::TapTempo(Instant::now())));
             }
         },
     );
@@ -335,7 +342,7 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
 /// Loop and click level, live: heard while dragging, saved when let go.
 /// Saving every frame of a drag would rewrite the config sixty times a
 /// second for nothing.
-fn levels(ui: &mut egui::Ui, looper: &mut LooperState) {
+fn levels(ui: &mut egui::Ui, looper: &LooperState, actions: &mut Vec<Action>) {
     // Scoped, so the width stays with these two.
     ui.scope(|ui| {
         ui.spacing_mut().slider_width = LEVEL_SLIDER_WIDTH;
@@ -346,7 +353,7 @@ fn levels(ui: &mut egui::Ui, looper: &mut LooperState) {
                 .suffix("%"),
         );
         if loop_slider.changed() {
-            looper.set_loop_volume_pct(loop_pct);
+            actions.push(Action::Looper(LooperAction::LoopVolume(loop_pct)));
         }
         let mut click_pct = looper.click_volume_pct();
         let click_slider = ui.add(
@@ -355,21 +362,21 @@ fn levels(ui: &mut egui::Ui, looper: &mut LooperState) {
                 .suffix("%"),
         );
         if click_slider.changed() {
-            looper.set_click_volume_pct(click_pct);
+            actions.push(Action::Looper(LooperAction::ClickVolume(click_pct)));
         }
         // A click on the track or a typed value changes it without a drag.
         let settled = |slider: &egui::Response| {
             slider.drag_stopped() || (slider.changed() && !slider.dragged())
         };
         if settled(&loop_slider) || settled(&click_slider) {
-            looper.save_levels();
+            actions.push(Action::Looper(LooperAction::SaveLevels));
         }
     });
 }
 
 /// Both modes shown side by side, the current one selected, so the
 /// control says where you are as well as where it goes.
-fn mode_switch(ui: &mut egui::Ui, looper: &mut LooperState) {
+fn mode_switch(ui: &mut egui::Ui, looper: &LooperState, actions: &mut Vec<Action>) {
     let mode = looper.mode();
     let clicked = ui
         .add_enabled_ui(looper.can_switch_mode(), |ui| {
@@ -386,21 +393,21 @@ fn mode_switch(ui: &mut egui::Ui, looper: &mut LooperState) {
         })
         .inner;
     if clicked {
-        looper.toggle_mode();
+        actions.push(Action::Looper(LooperAction::ToggleMode));
     }
 }
 
 /// What extended adds below the pedal. Drums and the mic will join the
 /// layer row here.
-fn extended_area(ui: &mut egui::Ui, looper: &mut LooperState) {
+fn extended_area(ui: &mut egui::Ui, looper: &LooperState, actions: &mut Vec<Action>) {
     ui.separator();
-    layer_row(ui, looper);
+    layer_row(ui, looper, actions);
 }
 
 /// One button per layer, numbered in recording order and lit while it
 /// plays. A row rather than a list: eight layers fit across the window,
 /// and wouldn't fit down it.
-fn layer_row(ui: &mut egui::Ui, looper: &mut LooperState) {
+fn layer_row(ui: &mut egui::Ui, looper: &LooperState, actions: &mut Vec<Action>) {
     let count = looper.layer_count();
     if count == 0 {
         ui.weak("Layers appear here once there's a loop");
@@ -428,7 +435,7 @@ fn layer_row(ui: &mut egui::Ui, looper: &mut LooperState) {
                     .on_hover_text(if playing { "Mute" } else { "Unmute" })
                     .clicked();
                 if clicked || key_pressed == Some(index) {
-                    looper.toggle_layer_mute(index);
+                    actions.push(Action::Looper(LooperAction::ToggleLayerMute(index)));
                 }
             }
         },

@@ -9,23 +9,26 @@ mod icon;
 use std::time::Instant;
 
 use app::{App, Screen};
+use looper_core::action::Action;
 use looper_hal::{Backends, cpal_backend::default_backends};
 
 /// Advances the looper, hands the frame to a screen renderer, and applies
-/// the action it returns. This and `ui/` are the only framework-aware code
-/// - swapping GUI library rewrites them, not the app.
+/// the actions it returns. This and `looper-ui-egui` are the only
+/// framework-aware code - swapping GUI library rewrites them, not the app.
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let action = match &mut self.screen {
+        let actions: Vec<Action> = match &mut self.screen {
             Screen::Settings(settings) => {
                 looper_ui_egui::settings::render(ui, settings, &self.backends)
+                    .into_iter()
+                    .collect()
             }
             Screen::Looper(looper) => {
                 // Long-press detection and the pre-roll countdown need
                 // continuous frames, not just input-triggered repaints.
                 ui.ctx().request_repaint();
                 // Advanced before the frame is drawn rather than part-way
-                // through drawing it, so `ui/` only ever reports intent
+                // through drawing it, so the screen only ever reports intent
                 // and every widget reads the same state: the button used
                 // to show what the indicator below it had already moved
                 // past, for one frame, whenever a pre-roll ran out.
@@ -34,13 +37,13 @@ impl eframe::App for App {
                     .input(|i| (i.key_down(egui::Key::Space), i.key_down(egui::Key::S)));
                 looper.set_stop_key_held(s_down);
                 looper.tick(space_down, Instant::now());
-                let action = looper_ui_egui::looper::render(ui, looper);
+                let actions = looper_ui_egui::looper::render(ui, looper);
                 fit_height_to_content(ui);
-                action
+                actions
             }
         };
 
-        if let Some(action) = action {
+        for action in actions {
             self.apply(action);
         }
     }

@@ -40,6 +40,13 @@ impl App {
         match action {
             Action::Start(config) => self.start_looper(config),
             Action::OpenSettings => self.open_settings(None),
+            // Only the looper screen asks; the screen it asked from may
+            // have gone already, if Settings opened in the same frame.
+            Action::Looper(action) => {
+                if let Screen::Looper(looper) = &mut self.screen {
+                    looper.act(action);
+                }
+            }
         }
     }
 

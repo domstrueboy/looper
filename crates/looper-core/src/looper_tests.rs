@@ -1984,3 +1984,54 @@ fn every_gesture_from_every_state_in_every_mode() {
         wrong.join("\n")
     );
 }
+
+// --- What the screen asks for ---------------------------------------------
+
+#[test]
+fn the_screens_actions_reach_the_looper() {
+    let (mut looper, driver, dir, at) = two_layers("looper-act");
+
+    looper.act(LooperAction::ToggleMetronome);
+    assert!(looper.is_metronome_on());
+    looper.act(LooperAction::ToggleLayerMute(1));
+    assert!(looper.is_layer_muted(1));
+    looper.act(LooperAction::LoopVolume(40));
+    looper.act(LooperAction::ClickVolume(60));
+    assert_eq!(
+        (looper.loop_volume_pct(), looper.click_volume_pct()),
+        (40, 60)
+    );
+
+    looper.act(LooperAction::Undo);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.layer_count(), 1, "undone");
+    looper.act(LooperAction::Redo);
+    driver.cycle(&vec![0.0; 512]);
+    looper.tick(false, at);
+    assert_eq!(looper.layer_count(), 2, "and redone");
+
+    // The round button, latched like Space: read by the next tick.
+    looper.act(LooperAction::ButtonHeld(true));
+    looper.tick(false, at + Duration::from_secs(1));
+    looper.act(LooperAction::ButtonHeld(false));
+    looper.tick(false, at + Duration::from_secs(1));
+    assert_eq!(looper.state(), LoopState::Overdubbing, "a press dubs");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_tempo_actions_reach_the_looper() {
+    let (mut looper, _driver, dir) = start("looper-act-tempo", &settings());
+    let bpm = looper.tempo();
+
+    looper.act(LooperAction::NudgeTempo(1));
+    assert_eq!(looper.tempo(), bpm + 1.0);
+    let at = Instant::now();
+    looper.act(LooperAction::TapTempo(at));
+    looper.act(LooperAction::TapTempo(at + Duration::from_millis(500)));
+    assert_eq!(looper.tempo(), 120.0, "two taps half a second apart");
+    looper.act(LooperAction::ToggleMode);
+    assert_eq!(looper.mode(), Mode::Extended);
+    let _ = std::fs::remove_dir_all(&dir);
+}

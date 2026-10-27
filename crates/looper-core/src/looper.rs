@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use looper_hal::{AudioStream, Backends};
 
+use crate::action::LooperAction;
 use crate::audio::engine;
 use crate::audio::fault::StreamFault;
 use crate::audio::scheduler::{Pattern, Scheduler};
@@ -216,6 +217,26 @@ impl LooperState {
 
     pub fn state(&self) -> LoopState {
         self.state_machine.state()
+    }
+
+    /// Carries out what the screen asked for.
+    pub fn act(&mut self, action: LooperAction) {
+        match action {
+            LooperAction::ButtonHeld(held) => self.set_button_held(held),
+            LooperAction::StopButtonHeld(held) => self.set_stop_button_held(held),
+            LooperAction::Undo => self.remove_last_layer(),
+            LooperAction::Redo => self.redo_layer(),
+            LooperAction::ToggleMetronome => self.toggle_metronome(),
+            LooperAction::NudgeTempo(delta) => self.change_metronome_bpm(delta),
+            LooperAction::HalveTempo => self.halve_tempo(),
+            LooperAction::DoubleTempo => self.double_tempo(),
+            LooperAction::TapTempo(at) => self.tap_tempo(at),
+            LooperAction::LoopVolume(pct) => self.set_loop_volume_pct(pct),
+            LooperAction::ClickVolume(pct) => self.set_click_volume_pct(pct),
+            LooperAction::SaveLevels => self.save_levels(),
+            LooperAction::ToggleMode => self.toggle_mode(),
+            LooperAction::ToggleLayerMute(index) => self.toggle_layer_mute(index),
+        }
     }
 
     /// Why the audio stopped, if it did.

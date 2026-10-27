@@ -215,12 +215,13 @@ in the order they're fixed:
   x state x gesture (press, double, hold, stop, stop-hold) to the state
   and layers it leaves - 75 rows, checked against the user guide. Then
   the gestures moved, unchanged, to `looper/pedal.rs`.
-- **9h. The UI is not a leaf.** `looper_ui_egui::looper::render` takes
-  `&mut LooperState` and calls undo, redo, mutes, tempo, levels and the
-  mode switch directly; `Action` only carries `Start` and
-  `OpenSettings`. Decided: the screen takes `&LooperState` and returns
-  its intents - the button latches included - and the app applies them,
-  as AGENTS.md says.
+- **9h. The looper screen a leaf - done.** `render` takes
+  `&LooperState` and returns `Action::Looper(LooperAction)` for every
+  control it has, the button latches included; the shell applies them
+  through `LooperState::act`. Still open: the Settings screen edits its
+  `SettingsState` draft in place and calls `refresh_*` (device
+  enumeration) from inside `render` - the same rule, if it's to hold
+  there too.
 - **9i. Tests.** `temp_dir` is written four times; one shared test
   helper.
 - **9j. Docs.** README's module diagram puts `app.rs` in looper-core

@@ -189,7 +189,7 @@ flowchart TB
     MAIN --> UIS
     MAIN -->|"tick(space, now)"| LOOPER
     UIL --> UII
-    UIL -->|"Action"| APP
+    UIL -->|"Action, LooperAction"| APP
     UIS -->|"Action::Start"| APP
     APP --> LOOPER
     APP --> SET
@@ -230,9 +230,12 @@ Three asymmetries the picture makes plain, and the prose above hides:
   handful of atomics. Audio to UI is those, plus a whole stream of
   samples through the capture ring, which is why the UI thread's copy
   of the loop exists at all.
-- **`ui-egui/` is a leaf.** It reads a model and returns an `Action`; it
-  never writes one. Swapping GUI library means replacing that crate and
-  `main.rs`'s shell, and nothing below them.
+- **`ui-egui/` is a leaf.** The looper screen takes `&LooperState` and
+  returns what was asked of it - `Action::Looper(LooperAction)` for its
+  own controls, the button latches included - and the shell applies
+  them after the frame is drawn, through `LooperState::act`. Swapping
+  GUI library means replacing that crate and `main.rs`'s shell, and
+  nothing below them.
 
 The files themselves:
 
@@ -273,7 +276,7 @@ crates/
     src/audio/scheduler.rs    where a pattern's steps fall at a tempo,
                               and a voice to play a one-shot on them
     src/audio/metronome.rs    the click track, on its own count or the loop's
-  looper-ui-egui/            rendering only - `render(ui, model) -> Action?`
+  looper-ui-egui/            rendering only - `render(ui, model) -> actions`
     src/looper.rs             the looper screen
     src/settings.rs           the settings screen
     src/indicator.rs          state circle + label + progress bar widget
