@@ -38,7 +38,11 @@ pub struct Readout {
 /// limited subset - anything else renders as an empty box.
 pub fn press_button_label(readout: &Readout, long_press_active: bool) -> &'static str {
     if long_press_active {
-        return if readout.state == LoopState::Idle { "🗑" } else { "⟲" };
+        return if readout.state == LoopState::Idle {
+            "🗑"
+        } else {
+            "⟲"
+        };
     }
     match readout.state {
         LoopState::Idle | LoopState::Looping => "⏺",
@@ -63,9 +67,10 @@ pub fn state_indicator(ui: &mut egui::Ui, readout: &Readout) {
         }
         LoopState::Recording => (egui::Color32::RED, "Recording"),
         // Says why Stop hasn't stopped it yet.
-        LoopState::Looping if readout.stopping == Some(StopMode::LoopEnd) => {
-            (egui::Color32::from_rgb(40, 200, 40), "Stopping at the loop end")
-        }
+        LoopState::Looping if readout.stopping == Some(StopMode::LoopEnd) => (
+            egui::Color32::from_rgb(40, 200, 40),
+            "Stopping at the loop end",
+        ),
         LoopState::Looping if readout.stopping == Some(StopMode::FadeOut) => {
             (egui::Color32::from_rgb(40, 200, 40), "Fading out")
         }

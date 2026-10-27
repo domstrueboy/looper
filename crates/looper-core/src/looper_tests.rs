@@ -1,7 +1,7 @@
 use super::*;
 
-use looper_hal::{BackendId, HalError};
 use looper_hal::mock::{self, MockDriver, mock};
+use looper_hal::{BackendId, HalError};
 
 /// Small enough to follow by hand, and a rate the mock device offers.
 const RATE: u32 = 44_100;
@@ -207,7 +207,11 @@ fn a_take_records_loops_and_clears() {
     };
 
     step(&mut looper);
-    assert_eq!(looper.state(), LoopState::Recording, "no pre-roll, straight in");
+    assert_eq!(
+        looper.state(),
+        LoopState::Recording,
+        "no pre-roll, straight in"
+    );
 
     driver.cycle(&vec![0.5; 2_048]);
     step(&mut looper);
@@ -267,7 +271,9 @@ fn a_stream_that_fails_says_so_on_the_screen() {
 
     driver.fail(HalError::Runtime("the device was unplugged".to_string()));
 
-    let reported = looper.device_fault().expect("the screen has something to show");
+    let reported = looper
+        .device_fault()
+        .expect("the screen has something to show");
     assert!(reported.contains("unplugged"), "got: {reported}");
 
     // And it keeps saying so: the stream is gone, and only reopening a
@@ -326,7 +332,11 @@ fn switching_mode_flips_it_and_saves_it() {
 
     assert_eq!(looper.mode(), Mode::Extended);
     let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
-    assert_eq!(saved.mode, Mode::Extended, "the app reopens the way it was left");
+    assert_eq!(
+        saved.mode,
+        Mode::Extended,
+        "the app reopens the way it was left"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -403,7 +413,10 @@ fn removing_a_muted_layer_frees_its_slot_unmuted() {
     looper.remove_last_layer();
 
     assert!(!looper.is_layer_muted(1), "the freed slot");
-    assert!(looper.is_layer_muted(0), "the layer still there keeps its mute");
+    assert!(
+        looper.is_layer_muted(0),
+        "the layer still there keeps its mute"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -587,7 +600,10 @@ fn the_tempo_changes_live_and_is_saved() {
 
     assert_eq!(looper.tempo(), 300.0);
     let saved = AppConfig::load_from(&config::config_path_in(&dir)).expect("written");
-    assert_eq!(saved.metronome_bpm, 300, "Settings and the next start agree");
+    assert_eq!(
+        saved.metronome_bpm, 300,
+        "Settings and the next start agree"
+    );
 
     // At 300 BPM a beat is 8,820 frames, so three clicks fit in 20,000
     // where 120 BPM would fit one. Each click opens on a zero sample after
@@ -607,7 +623,11 @@ fn tapping_sets_the_tempo_and_saves_it() {
     let (mut looper, _driver, dir) = start("looper-tap", &settings());
     let t0 = Instant::now();
     looper.tap_tempo(t0);
-    assert_eq!(looper.tempo(), f64::from(config::DEFAULT_METRONOME_BPM), "one tap: nothing yet");
+    assert_eq!(
+        looper.tempo(),
+        f64::from(config::DEFAULT_METRONOME_BPM),
+        "one tap: nothing yet"
+    );
 
     looper.tap_tempo(t0 + Duration::from_millis(600));
     looper.tap_tempo(t0 + Duration::from_millis(1_190));
@@ -639,7 +659,10 @@ fn levels_are_heard_at_once_and_saved_when_asked() {
 
     looper.set_loop_volume_pct(0);
     looper.set_click_volume_pct(40);
-    assert!(driver.cycle(&silence).iter().all(|&s| s == 0.0), "the loop silenced");
+    assert!(
+        driver.cycle(&silence).iter().all(|&s| s == 0.0),
+        "the loop silenced"
+    );
     let before = AppConfig::load_from(&config::config_path_in(&dir));
     assert_ne!(before.map(|c| c.volume_pct), Some(0), "not saved mid-drag");
 
@@ -665,7 +688,10 @@ const BAR: usize = 88_200;
 
 /// Recording with the metronome on: through the bar's count-in, then
 /// `frames` into the take, then a press to stop.
-fn record_against_the_click(name: &str, frames: usize) -> (LooperState, MockDriver, PathBuf, Instant) {
+fn record_against_the_click(
+    name: &str,
+    frames: usize,
+) -> (LooperState, MockDriver, PathBuf, Instant) {
     let (mut looper, driver, dir) = start(name, &counted_in());
     looper.toggle_metronome();
     let mut at = Instant::now();
@@ -690,15 +716,16 @@ fn feed(looper: &mut LooperState, driver: &MockDriver, frames: usize, at: Instan
 
 #[test]
 fn stopping_late_cuts_the_loop_back_to_the_bar() {
-    let (mut looper, driver, dir, at) = record_against_the_click("looper-bars-late", 3 * BAR + BAR / 3);
+    let (mut looper, driver, dir, at) =
+        record_against_the_click("looper-bars-late", 3 * BAR + BAR / 3);
     assert_eq!(looper.state(), LoopState::Looping, "stops straight away");
     driver.cycle(&vec![0.0; 512]);
     looper.tick(false, at);
 
     let (secs, _) = looper.loop_duration_and_progress();
     assert_eq!(secs, 6.0, "three bars of 2 s");
-    let (saved, _) = crate::wav::read(&config::loop_dir_in(&dir).join("layer-1.wav"))
-        .expect("saved");
+    let (saved, _) =
+        crate::wav::read(&config::loop_dir_in(&dir).join("layer-1.wav")).expect("saved");
     assert_eq!(saved.len(), 3 * BAR, "and saved that way, not wrapped");
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -745,7 +772,10 @@ fn with_the_metronome_off_a_loop_is_as_long_as_it_was_played() {
     looper.tick(false, at);
 
     let (secs, _) = looper.loop_duration_and_progress();
-    assert!((secs - (BAR + 1_000) as f32 / 44_100.0).abs() < 0.02, "got {secs}");
+    assert!(
+        (secs - (BAR + 1_000) as f32 / 44_100.0).abs() < 0.02,
+        "got {secs}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -765,7 +795,10 @@ fn a_count_in_is_one_bar_not_the_record_delay() {
     feed(&mut looper, &driver, BAR / 2, at);
     looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64 + 100));
     assert_eq!(looper.state(), LoopState::Arming);
-    assert!((looper.preroll_remaining_secs() - 0.9).abs() < 0.01, "a bar of 2 s");
+    assert!(
+        (looper.preroll_remaining_secs() - 0.9).abs() < 0.01,
+        "a bar of 2 s"
+    );
 
     feed(&mut looper, &driver, BAR / 2 + 1_000, at);
     assert_eq!(looper.state(), LoopState::Recording, "on the bar line");
@@ -787,7 +820,11 @@ fn in_three_four_the_count_in_is_three_beats() {
     assert_eq!(looper.state(), LoopState::Arming);
     feed(&mut looper, &driver, 2_000, at);
 
-    assert_eq!(looper.state(), LoopState::Recording, "on the third beat's end");
+    assert_eq!(
+        looper.state(),
+        LoopState::Recording,
+        "on the third beat's end"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -801,7 +838,11 @@ fn turning_the_metronome_off_leaves_a_count_in_counting() {
     looper.toggle_metronome();
     feed(&mut looper, &driver, BAR + 1_000, at);
 
-    assert_eq!(looper.state(), LoopState::Recording, "on the bar line all the same");
+    assert_eq!(
+        looper.state(),
+        LoopState::Recording,
+        "on the bar line all the same"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -817,7 +858,10 @@ fn starting(record_start: config::RecordStart) -> AppConfig {
 #[test]
 fn instant_records_as_space_goes_down() {
     // A record delay is set, and ignored.
-    let (mut looper, _driver, dir) = start("looper-start-instant", &starting(config::RecordStart::Instant));
+    let (mut looper, _driver, dir) = start(
+        "looper-start-instant",
+        &starting(config::RecordStart::Instant),
+    );
     let at = Instant::now();
     press(&mut looper, at, at);
     assert_eq!(looper.state(), LoopState::Recording);
@@ -835,13 +879,20 @@ fn with_the_metronome_on_a_delay_is_still_a_delay() {
 
     looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64));
 
-    assert_eq!(looper.state(), LoopState::Recording, "when the delay runs out");
+    assert_eq!(
+        looper.state(),
+        LoopState::Recording,
+        "when the delay runs out"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn detect_waits_for_the_first_note() {
-    let (mut looper, driver, dir) = start("looper-start-detect", &starting(config::RecordStart::Detect));
+    let (mut looper, driver, dir) = start(
+        "looper-start-detect",
+        &starting(config::RecordStart::Detect),
+    );
     let at = Instant::now();
     press(&mut looper, at, at);
     assert!(looper.is_waiting_to_hear());
@@ -862,14 +913,21 @@ fn detect_waits_for_the_first_note() {
 
 #[test]
 fn a_press_calls_off_waiting_for_the_first_note() {
-    let (mut looper, driver, dir) = start("looper-start-detect-off", &starting(config::RecordStart::Detect));
+    let (mut looper, driver, dir) = start(
+        "looper-start-detect-off",
+        &starting(config::RecordStart::Detect),
+    );
     let mut at = Instant::now();
     press(&mut looper, at, at);
 
     single(&mut looper, &mut at);
     feed(&mut looper, &driver, 4_096, at);
 
-    assert_eq!(looper.state(), LoopState::Idle, "and playing doesn't start it");
+    assert_eq!(
+        looper.state(),
+        LoopState::Idle,
+        "and playing doesn't start it"
+    );
     assert_eq!(looper.loop_duration_and_progress().0, 0.0);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -899,7 +957,11 @@ fn a_loop_played_without_the_click_gets_a_tempo_from_its_length() {
     // 2.6 s is four beats at 92.3.
     let (looper, _driver, dir, _) = free_take("looper-tempo-guess", 114_660);
     assert!(looper.tempo_is_the_loops());
-    assert!((looper.tempo() - 92.3).abs() < 0.1, "got {}", looper.tempo());
+    assert!(
+        (looper.tempo() - 92.3).abs() < 0.1,
+        "got {}",
+        looper.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -910,14 +972,21 @@ fn a_loop_played_to_the_click_keeps_the_clicks_tempo() {
     driver.cycle(&vec![0.0; 512]);
     looper.tick(false, at);
     assert!(looper.tempo_is_the_loops());
-    assert!((looper.tempo() - 120.0).abs() < 0.01, "got {}", looper.tempo());
+    assert!(
+        (looper.tempo() - 120.0).abs() < 0.01,
+        "got {}",
+        looper.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn a_wrong_guess_is_halved_or_doubled_but_not_nudged() {
     let (mut looper, _driver, dir, _) = free_take("looper-tempo-fix", 88_200);
-    assert!((looper.tempo() - 120.0).abs() < 0.01, "two seconds, four beats");
+    assert!(
+        (looper.tempo() - 120.0).abs() < 0.01,
+        "two seconds, four beats"
+    );
 
     looper.change_metronome_bpm(5);
     assert!((looper.tempo() - 120.0).abs() < 0.01, "the loop fixes it");
@@ -972,7 +1041,11 @@ fn a_saved_loop_comes_back_with_a_tempo() {
     restored.tick(false, Instant::now());
 
     assert!(restored.tempo_is_the_loops());
-    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
+    assert!(
+        (restored.tempo() - 120.0).abs() < 0.01,
+        "got {}",
+        restored.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -985,21 +1058,30 @@ fn a_halved_tempo_survives_a_restart() {
 
     let restored = reopen(&dir);
 
-    assert!((restored.tempo() - 60.0).abs() < 0.01, "got {}", restored.tempo());
+    assert!(
+        (restored.tempo() - 60.0).abs() < 0.01,
+        "got {}",
+        restored.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn a_loop_played_to_the_click_comes_back_at_the_clicks_tempo() {
     // Three bars at 120 is six seconds - which a guess would call 80.
-    let (mut looper, driver, dir, at) = record_against_the_click("looper-tempo-click-saved", 3 * BAR);
+    let (mut looper, driver, dir, at) =
+        record_against_the_click("looper-tempo-click-saved", 3 * BAR);
     driver.cycle(&vec![0.0; 512]);
     looper.tick(false, at);
     drop(looper);
 
     let restored = reopen(&dir);
 
-    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
+    assert!(
+        (restored.tempo() - 120.0).abs() < 0.01,
+        "got {}",
+        restored.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1012,14 +1094,21 @@ fn a_saved_tempo_the_click_cannot_play_is_guessed_instead() {
 
     let restored = reopen(&dir);
 
-    assert!((restored.tempo() - 120.0).abs() < 0.01, "got {}", restored.tempo());
+    assert!(
+        (restored.tempo() - 120.0).abs() < 0.01,
+        "got {}",
+        restored.tempo()
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn clearing_deletes_the_saved_tempo() {
     let (mut looper, _driver, dir, at) = free_take("looper-tempo-saved-clear", 88_200);
-    assert!(loop_mirror::load_beats(&config::loop_dir_in(&dir)).is_some(), "saved");
+    assert!(
+        loop_mirror::load_beats(&config::loop_dir_in(&dir)).is_some(),
+        "saved"
+    );
 
     hold_stop(&mut looper, at);
 
@@ -1099,7 +1188,11 @@ fn rec_play_walks_record_play_dub_play() {
     assert_eq!(looper.state(), LoopState::Looping, "the take plays");
 
     single(&mut looper, &mut at);
-    assert_eq!(looper.state(), LoopState::Overdubbing, "a press while playing dubs");
+    assert_eq!(
+        looper.state(),
+        LoopState::Overdubbing,
+        "a press while playing dubs"
+    );
     feed(&mut looper, &driver, 4_000, at);
     single(&mut looper, &mut at);
     feed(&mut looper, &driver, 512, at);
@@ -1144,18 +1237,30 @@ fn rec_dub_dubs_layer_after_layer_without_playing_between() {
     let (mut looper, driver, dir) = start("looper-rec-dub", &rec_dub(4));
     let mut at = Instant::now();
     take(&mut looper, &driver, &mut at);
-    assert_eq!(looper.state(), LoopState::Overdubbing, "straight into the second part");
+    assert_eq!(
+        looper.state(),
+        LoopState::Overdubbing,
+        "straight into the second part"
+    );
     feed(&mut looper, &driver, 4_000, at);
 
     single(&mut looper, &mut at);
-    assert_eq!(looper.state(), LoopState::Overdubbing, "the next layer, not play");
+    assert_eq!(
+        looper.state(),
+        LoopState::Overdubbing,
+        "the next layer, not play"
+    );
     feed(&mut looper, &driver, 4_000, at);
     single(&mut looper, &mut at);
     feed(&mut looper, &driver, 4_000, at);
     looper.stop();
     feed(&mut looper, &driver, 512, at);
 
-    assert_eq!(looper.state(), LoopState::Looping, "S steps down to playing");
+    assert_eq!(
+        looper.state(),
+        LoopState::Looping,
+        "S steps down to playing"
+    );
     assert_eq!(looper.layer_count(), 4, "every press a layer of its own");
     assert!(
         config::loop_dir_in(&dir).join("layer-4.wav").exists(),
@@ -1186,7 +1291,11 @@ fn a_layer_per_pass_stacks_layers_with_no_press() {
     let (mut looper, driver, dir) = start("looper-per-pass", &rec_dub_per_pass(8));
     let mut at = Instant::now();
     take(&mut looper, &driver, &mut at);
-    assert_eq!(looper.state(), LoopState::Overdubbing, "straight into the second part");
+    assert_eq!(
+        looper.state(),
+        LoopState::Overdubbing,
+        "straight into the second part"
+    );
 
     feed(&mut looper, &driver, 20_000, at);
     assert_eq!(looper.layer_count(), 3, "two passes done, a third going");
@@ -1211,7 +1320,11 @@ fn a_layer_per_pass_stops_in_one_press() {
 
     looper.stop();
 
-    assert_eq!(looper.state(), LoopState::Stopped, "no step down, unlike REC>DUB");
+    assert_eq!(
+        looper.state(),
+        LoopState::Stopped,
+        "no step down, unlike REC>DUB"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1299,7 +1412,11 @@ fn stop_calls_off_a_pre_roll() {
     looper.stop();
     looper.tick(false, at + Duration::from_millis(PREROLL_MS as u64 * 2));
 
-    assert_eq!(looper.state(), LoopState::Idle, "and it doesn't start later");
+    assert_eq!(
+        looper.state(),
+        LoopState::Idle,
+        "and it doesn't start later"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1416,7 +1533,10 @@ fn holding_space_while_playing_undoes_the_last_layer() {
 
     assert_eq!(looper.state(), LoopState::Looping, "still playing");
     assert_eq!(looper.layer_count(), 1);
-    assert!(looper.can_redo_layer(), "the layer, not the dub, waits for redo");
+    assert!(
+        looper.can_redo_layer(),
+        "the layer, not the dub, waits for redo"
+    );
     assert!(!config::loop_dir_in(&dir).join("layer-3.wav").exists());
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1470,7 +1590,11 @@ fn holding_space_on_a_stopped_loop_undoes_and_stays_stopped() {
 
     hold_space(&mut looper, &driver, &mut at);
 
-    assert_eq!(looper.state(), LoopState::Stopped, "its press played it; taken back");
+    assert_eq!(
+        looper.state(),
+        LoopState::Stopped,
+        "its press played it; taken back"
+    );
     assert_eq!(looper.layer_count(), 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -1493,7 +1617,10 @@ fn holding_space_through_the_end_of_the_first_take_empties_the_looper() {
 fn holding_the_stop_button_clears_a_stopped_loop() {
     let (mut looper, _driver, dir, at) = two_layers("looper-hold-stop-button");
     looper.stop();
-    assert!(looper.can_stop_or_clear(), "stopped, there's still a loop to clear");
+    assert!(
+        looper.can_stop_or_clear(),
+        "stopped, there's still a loop to clear"
+    );
 
     looper.set_stop_button_held(true);
     looper.tick(false, at);
@@ -1555,14 +1682,19 @@ fn space_while_it_plays_out_calls_the_stop_off_without_dubbing() {
     single(&mut looper, &mut at);
     feed(&mut looper, &driver, 9_000, at);
 
-    assert_eq!(looper.state(), LoopState::Looping, "past the loop end, still playing");
+    assert_eq!(
+        looper.state(),
+        LoopState::Looping,
+        "past the loop end, still playing"
+    );
     assert_eq!(looper.layer_count(), 1, "no dub");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn a_dub_stopped_at_the_loop_end_is_kept_at_once() {
-    let (mut looper, driver, dir) = start("looper-stop-end-dub", &stopping(config::StopMode::LoopEnd));
+    let (mut looper, driver, dir) =
+        start("looper-stop-end-dub", &stopping(config::StopMode::LoopEnd));
     let mut at = Instant::now();
     take(&mut looper, &driver, &mut at);
     single(&mut looper, &mut at);
@@ -1570,7 +1702,11 @@ fn a_dub_stopped_at_the_loop_end_is_kept_at_once() {
 
     looper.stop();
     feed(&mut looper, &driver, 512, at);
-    assert_eq!(looper.state(), LoopState::Looping, "the dub closed, the loop playing out");
+    assert_eq!(
+        looper.state(),
+        LoopState::Looping,
+        "the dub closed, the loop playing out"
+    );
     assert_eq!(looper.layer_count(), 2);
 
     feed(&mut looper, &driver, 8_000, at);
@@ -1596,7 +1732,8 @@ fn a_fade_out_stops_once_it_has_faded() {
 #[test]
 fn ending_the_first_take_with_stop_is_always_at_once() {
     // The loop hasn't played yet: there's nothing to play out or fade.
-    let (mut looper, driver, dir) = start("looper-stop-take-end", &stopping(config::StopMode::FadeOut));
+    let (mut looper, driver, dir) =
+        start("looper-stop-take-end", &stopping(config::StopMode::FadeOut));
     let mut at = Instant::now();
     single(&mut looper, &mut at);
     feed(&mut looper, &driver, 8_000, at);
@@ -1609,7 +1746,10 @@ fn ending_the_first_take_with_stop_is_always_at_once() {
 
 #[test]
 fn a_loop_stopped_at_its_end_plays_again_on_a_press() {
-    let (mut looper, driver, dir) = start("looper-stop-end-replay", &stopping(config::StopMode::LoopEnd));
+    let (mut looper, driver, dir) = start(
+        "looper-stop-end-replay",
+        &stopping(config::StopMode::LoopEnd),
+    );
     let mut at = Instant::now();
     take(&mut looper, &driver, &mut at);
     looper.stop();
@@ -1620,7 +1760,9 @@ fn a_loop_stopped_at_its_end_plays_again_on_a_press() {
     feed(&mut looper, &driver, 512, at);
 
     assert_eq!(looper.state(), LoopState::Looping);
-    assert!(looper.loop_duration_and_progress().1 > 0.0, "moving, not held at the top");
+    assert!(
+        looper.loop_duration_and_progress().1 > 0.0,
+        "moving, not held at the top"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
-

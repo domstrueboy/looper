@@ -11,14 +11,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::{
-    AudioBackend, AudioStream, BackendId, DeviceCaps, DeviceId, DeviceInfo, Direction, ErrorSink,
-    HalError, HalResult, InputProcessor, MAX_BLOCK_FRAMES, OpenDevice, OutputProcessor,
-    StreamFormat, StreamRequest, CANDIDATE_SAMPLE_RATES,
+    AudioBackend, AudioStream, BackendId, CANDIDATE_SAMPLE_RATES, DeviceCaps, DeviceId, DeviceInfo,
+    Direction, ErrorSink, HalError, HalResult, InputProcessor, MAX_BLOCK_FRAMES, OpenDevice,
+    OutputProcessor, StreamFormat, StreamRequest,
 };
 
 /// The one device this backend reports.
 pub const DEVICE: &str = "Mock Device";
-
 
 struct Running {
     input: Box<dyn InputProcessor>,
@@ -331,7 +330,6 @@ impl MockDriver {
             log,
         )
     }
-
 }
 
 /// Errors a stream reported, for a test to assert on. Behind a mutex

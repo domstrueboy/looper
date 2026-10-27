@@ -32,7 +32,12 @@ impl LoopTempo {
 
     /// For a loop played against the click, already a whole number of
     /// its bars: nothing to guess.
-    pub fn from_bars(loop_len: usize, sample_rate: u32, bar_frames: f64, beats_per_bar: u32) -> Self {
+    pub fn from_bars(
+        loop_len: usize,
+        sample_rate: u32,
+        bar_frames: f64,
+        beats_per_bar: u32,
+    ) -> Self {
         let bars = (loop_len as f64 / bar_frames).round().max(1.0) as u32;
         Self::with_beats(bars * beats_per_bar, loop_len, sample_rate)
     }

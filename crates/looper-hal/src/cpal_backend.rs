@@ -286,20 +286,68 @@ impl OpenDevice for CpalOpenDevice {
     ) -> HalResult<Box<dyn AudioStream>> {
         let channels = self.format.input_channels as usize;
         let input_stream = match self.input_format {
-            SampleFormat::F32 => capture::<f32>(&self.input_device, &self.input_config, input, channels, &on_error),
-            SampleFormat::I32 => capture::<i32>(&self.input_device, &self.input_config, input, channels, &on_error),
-            SampleFormat::I24 => capture::<cpal::I24>(&self.input_device, &self.input_config, input, channels, &on_error),
-            SampleFormat::I16 => capture::<i16>(&self.input_device, &self.input_config, input, channels, &on_error),
+            SampleFormat::F32 => capture::<f32>(
+                &self.input_device,
+                &self.input_config,
+                input,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I32 => capture::<i32>(
+                &self.input_device,
+                &self.input_config,
+                input,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I24 => capture::<cpal::I24>(
+                &self.input_device,
+                &self.input_config,
+                input,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I16 => capture::<i16>(
+                &self.input_device,
+                &self.input_config,
+                input,
+                channels,
+                &on_error,
+            ),
             other => Err(unsupported(other)),
         }?;
 
         let render_device = self.output_device.as_ref().unwrap_or(&self.input_device);
         let channels = self.format.output_channels as usize;
         let output_stream = match self.output_format {
-            SampleFormat::F32 => render::<f32>(render_device, &self.output_config, output, channels, &on_error),
-            SampleFormat::I32 => render::<i32>(render_device, &self.output_config, output, channels, &on_error),
-            SampleFormat::I24 => render::<cpal::I24>(render_device, &self.output_config, output, channels, &on_error),
-            SampleFormat::I16 => render::<i16>(render_device, &self.output_config, output, channels, &on_error),
+            SampleFormat::F32 => render::<f32>(
+                render_device,
+                &self.output_config,
+                output,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I32 => render::<i32>(
+                render_device,
+                &self.output_config,
+                output,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I24 => render::<cpal::I24>(
+                render_device,
+                &self.output_config,
+                output,
+                channels,
+                &on_error,
+            ),
+            SampleFormat::I16 => render::<i16>(
+                render_device,
+                &self.output_config,
+                output,
+                channels,
+                &on_error,
+            ),
             other => Err(unsupported(other)),
         }?;
 
@@ -319,7 +367,9 @@ impl OpenDevice for CpalOpenDevice {
 }
 
 fn unsupported(format: SampleFormat) -> HalError {
-    HalError::UnsupportedConfig(format!("sample format {format:?} is not one this app can read"))
+    HalError::UnsupportedConfig(format!(
+        "sample format {format:?} is not one this app can read"
+    ))
 }
 
 fn sink_for(on_error: &ErrorSink) -> impl FnMut(cpal::Error) + Send + 'static {

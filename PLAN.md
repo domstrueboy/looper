@@ -50,7 +50,7 @@ layer mute, redo, the metronome with live tempo, tap tempo and a time
 signature, loops snapped to bars with a tempo for every loop, the pedal
 feel - two pedals (Space never stops, S always does), three record
 modes, hold to undo, record start and stop modes - and loop and click
-levels on screen. Next is step 9, the code review, in a fresh session.
+levels on screen. Step 9, the code review, is under way.
 
 Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
@@ -176,26 +176,64 @@ Worth settling before the work they block starts.
 
 Ordered. One step at a time, each a commit (see *Ground rules*).
 
-### 9. Code review - next, in a fresh session
+### 9. Code review - under way
 
-The plan pass is done: this file was restructured against the notes on
-positioning, and the finished steps moved to `v2-archive.md`. What's
-left is the code, read with fresh eyes - the session that wrote step 7
-reworked the controls three times, and the drums will build on the
-scheduler, the tempo and the press logic as they stand. Findings become
-sub-steps (9a, 9b, ...), fixed before step 10.
+Read with fresh eyes before the drums build on the scheduler, the tempo
+and the press logic. Checked and clean: nothing the callback reaches
+allocates, locks or does I/O, and every loop in it is bounded - the
+per-pass split loop included, since a pass only ends with a slot free
+for the next; `cpal` only in hal, `egui` only in app/ui, the HAL with no
+looping; the suite runs in about a second with no sleeps. The findings,
+in the order they're fixed:
 
-| Area | What to check |
-|---|---|
-| Real time | Everything the callback reaches: no allocation, lock, I/O or unbounded loop - the per-pass split loop, the detector and the fade included |
-| Boundaries | `egui` only in app/ui, `cpal` only in hal, the UI a leaf, HAL with no looping |
-| Press logic | `looper.rs` grew press, double, hold, stop, `pressed_from`, `undo_pending`, `audio_start`, `stop_pending` - likely its own module, with one table-driven test over every record mode x state x gesture |
-| Thread contract | Every `SharedControl` request and level (clear, remove, redo, abandon, next layer, pending stop) and the order the callback reads them in, written down in one place |
-| Dead code | Paths nothing reaches any more - e.g. the stack's "remove the only layer" stash, `can_stop` beside `can_stop_or_clear` |
-| Tests | Gaps, duplicated helpers (the edit scripts duplicated several), anything slow or timing-sensitive |
-| Docs | README and the user guide against the app as it behaves; README's module diagram (missing `tempo.rs`, `tap_tempo.rs`); the screenshot |
-| Hygiene | `cargo fmt` clean repo-wide (it isn't), the clippy `as_chunks` warning, line endings (`.gitattributes`) |
-| Memory | 8 layers x 120 s, held twice - what Settings says against what's allocated |
+- **9a. Hygiene - done.** `cargo fmt` repo-wide, the clippy `as_chunks`
+  warning, CRLF working copies back to LF, and `rustfmt.toml` with
+  `newline_style = "Unix"` so `cargo fmt` stops preserving CRLF.
+- **9b. Saving stalls the UI thread.** Every take's end rewrites every
+  layer, synchronously, inside `tick`: 8 x 60 s is ~90 MB laid out,
+  encoded and written in one frame, and a layer per pass does it every
+  pass. A press during that frame is read late, so the take it ends or
+  starts lands late. Write only what changed (a new layer, a removed
+  one) and on a writer thread.
+- **9c. The copy grows without bound during a dub.** `LoopMirror` keeps
+  a take as played, so a five-minute dub over an 8 s loop holds five
+  minutes of samples rather than one layer's worth. Fold each pass into
+  a loop-length buffer as it arrives, which makes "held twice" true;
+  then say so in Settings, whose "Reserves N MB" counts the stack only.
+- **9d. Real-time edges.** Looping with an empty stack (a take that got
+  no input, e.g. a dead capture end) makes `add_on_loop` retrigger the
+  click at the top of every block - a buzz. And `set_bpm` builds a
+  `Scheduler`, whose `assert!(bpm > 0.0)` is a panic reachable from the
+  callback; ignore a tempo that isn't finite and positive instead.
+- **9e. Dead code.** `LoopStack`'s "remove the only layer" stash
+  (`removed_len`, the `count == 0` branches of remove and redo) - undo
+  never takes the first layer; `can_stop` (tests only); the comment on
+  `active_loop_tempo` about a removed loop redo could bring back;
+  `Pattern::METRONOME` and `Voice::is_playing` (tests only).
+  `Pattern::new` stays - the drums need it.
+- **9f. Thread contract.** One table in `shared_control.rs`: every
+  request and level, who sets it, when the callback reads it and in
+  what order (next layer, then state change with abandon, then clear,
+  remove, redo, mutes, then pending stop inside the playing branch).
+  Plus why `request_stop(Immediate)` stores the same 0 as "none".
+- **9g. Press logic.** First a table-driven test over record mode x
+  state x gesture (press, double, hold, stop, stop-hold) to the
+  resulting state and requests. Then press, double, hold, stop,
+  `end_take` and `clear` move to `looper/pedal.rs` - a child module
+  still sees `LooperState`'s fields, so it's a move, not a redesign.
+- **9h. The UI is not a leaf.** `looper_ui_egui::looper::render` takes
+  `&mut LooperState` and calls undo, redo, mutes, tempo, levels and the
+  mode switch directly; `Action` only carries `Start` and
+  `OpenSettings`. Either the screen returns its intents and the app
+  applies them, or AGENTS.md's rule is relaxed - a decision first.
+- **9i. Tests.** `temp_dir` is written three times; one shared test
+  helper.
+- **9j. Docs.** README's module diagram puts `app.rs` in looper-core
+  and lacks `tempo.rs`, `tap_tempo.rs`, `metronome.rs`, `scheduler.rs`
+  and `click.rs`. Stale doc comments: `state_machine.rs` (long press
+  clears; "the overdub control"; Arming "treated like Idle"),
+  `looper-ui-egui`'s "`egui` nowhere else", `main.rs`'s `ui/`. The user
+  guide read against the app. The screenshot needs retaking by hand.
 
 ### 10. Manual test plan
 

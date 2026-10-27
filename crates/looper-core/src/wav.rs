@@ -85,8 +85,10 @@ fn decode(bytes: &[u8]) -> Option<(Vec<f32>, u32)> {
             }
             b"data" => {
                 samples = Some(
-                    body.chunks_exact(BYTES_PER_SAMPLE as usize)
-                        .map(|s| sample::from_pcm32(i32::from_le_bytes([s[0], s[1], s[2], s[3]])))
+                    body.as_chunks::<{ BYTES_PER_SAMPLE as usize }>()
+                        .0
+                        .iter()
+                        .map(|&s| sample::from_pcm32(i32::from_le_bytes(s)))
                         .collect(),
                 );
             }

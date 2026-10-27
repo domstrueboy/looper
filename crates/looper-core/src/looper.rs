@@ -9,7 +9,6 @@ use crate::audio::engine;
 use crate::audio::fault::StreamFault;
 use crate::audio::scheduler::{Pattern, Scheduler};
 use crate::audio::shared_control::SharedControl;
-use crate::state_machine::{LoopState, LoopStateMachine};
 use crate::config::{
     self, AppConfig, CLICK_VOLUME_PCT_RANGE, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart,
     StopMode, VOLUME_PCT_RANGE,
@@ -17,6 +16,7 @@ use crate::config::{
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
+use crate::state_machine::{LoopState, LoopStateMachine};
 use crate::tap_tempo::TapTempo;
 use crate::tempo::LoopTempo;
 
@@ -141,7 +141,10 @@ impl LooperState {
         settings: &AppConfig,
         dir: PathBuf,
     ) -> Result<Self, String> {
-        let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+        let control = Arc::new(SharedControl::new(
+            settings.volume_pct,
+            settings.metronome_bpm,
+        ));
         control.publish_click_volume_pct(settings.click_volume_pct);
         // Whatever was left from last time, if it still fits what's
         // configured now.
@@ -171,9 +174,7 @@ impl LooperState {
                 settings.long_press_ms,
             ))),
             button_held: false,
-            stop_input: InputHandler::new(Duration::from_millis(u64::from(
-                settings.long_press_ms,
-            ))),
+            stop_input: InputHandler::new(Duration::from_millis(u64::from(settings.long_press_ms))),
             stop_key_held: false,
             stop_button_held: false,
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
@@ -267,7 +268,6 @@ impl LooperState {
             _ => false,
         }
     }
-
 
     /// Whether the stop control would do anything: something has to be
     /// playing, recording or counting in.
@@ -379,7 +379,10 @@ impl LooperState {
     }
 
     pub fn double_tempo(&mut self) {
-        if let Some(doubled) = self.active_loop_tempo().and_then(|t| t.doubled(bpm_range())) {
+        if let Some(doubled) = self
+            .active_loop_tempo()
+            .and_then(|t| t.doubled(bpm_range()))
+        {
             self.loop_tempo = Some(doubled);
             self.control.publish_metronome_bpm(self.tempo());
             self.save_tempo();
@@ -505,7 +508,8 @@ impl LooperState {
             *CLICK_VOLUME_PCT_RANGE.start(),
             *CLICK_VOLUME_PCT_RANGE.end(),
         );
-        self.control.publish_click_volume_pct(self.config.click_volume_pct);
+        self.control
+            .publish_click_volume_pct(self.config.click_volume_pct);
     }
 
     /// Saves both levels, so the next start opens where they were left.
@@ -698,9 +702,11 @@ impl LooperState {
                 }
                 // A hand-edited file can say anything; a tempo the click
                 // can't play falls back to the guess.
-                TempoSource::Saved(beats) => Some(LoopTempo::with_beats(beats, len, self.sample_rate))
-                    .filter(|tempo| bpm_range().contains(&tempo.bpm()))
-                    .unwrap_or(guess),
+                TempoSource::Saved(beats) => {
+                    Some(LoopTempo::with_beats(beats, len, self.sample_rate))
+                        .filter(|tempo| bpm_range().contains(&tempo.bpm()))
+                        .unwrap_or(guess)
+                }
             });
             self.save_tempo();
         }

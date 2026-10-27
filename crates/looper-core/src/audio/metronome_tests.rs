@@ -98,7 +98,10 @@ fn beat_one_is_accented_and_the_bar_follows_the_time_signature() {
 
     assert_eq!(out[..len], accent(RATE)[..], "beat one");
     assert_eq!(out[BEAT..BEAT + len], click(RATE)[..], "beat two");
-    assert_eq!(out[3 * BEAT..3 * BEAT + len], accent(RATE)[..], "the next bar's one");
+    assert_eq!(
+        out[3 * BEAT..3 * BEAT + len],
+        accent(RATE)[..],
+        "the next bar's one"
+    );
     assert_eq!(metronome.bar_frames(), (3 * BEAT) as f64);
 }
-

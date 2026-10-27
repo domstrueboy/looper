@@ -55,5 +55,9 @@ fn a_long_pause_starts_a_fresh_count() {
 
     let later = t0 + ms(1_000) + TAP_TIMEOUT + ms(1);
     assert_eq!(tap.tap(later), None, "the first tap of a new count");
-    assert_eq!(tap.tap(later + ms(500)), Some(120.0), "nothing of the old one left");
+    assert_eq!(
+        tap.tap(later + ms(500)),
+        Some(120.0),
+        "nothing of the old one left"
+    );
 }

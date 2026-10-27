@@ -143,7 +143,14 @@ fn an_overdub_lands_where_it_began() {
 #[test]
 fn a_second_pass_sums_into_the_same_layer() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &[0.0; 4], 4, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &[0.0; 4],
+        4,
+        0,
+    );
 
     // Six samples over a four-sample loop: the last two come back round.
     record(
@@ -213,7 +220,14 @@ fn a_laid_out_take_matches_what_the_layer_stack_plays() {
 #[test]
 fn recording_again_replaces_the_loop() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     record(
         &mut input,
         &mut mirror,
@@ -240,7 +254,14 @@ fn recording_again_replaces_the_loop() {
 #[test]
 fn removing_and_clearing_follow_the_stack() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     record(
         &mut input,
         &mut mirror,
@@ -316,7 +337,14 @@ fn a_saved_loop_comes_back_layer_for_layer() {
 fn a_loop_recorded_at_another_rate_is_not_loaded() {
     let directory = temp_dir("wrong-rate");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.save(&directory).expect("saves");
 
     // No resampling, so a rate change means the loop is unusable.
@@ -330,7 +358,14 @@ fn a_loop_recorded_at_another_rate_is_not_loaded() {
 fn a_gap_in_what_arrived_stops_the_loop_being_saved() {
     let directory = temp_dir("lost");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
 
     mirror.note_lost_samples();
 
@@ -344,7 +379,14 @@ fn a_gap_in_what_arrived_stops_the_loop_being_saved() {
 fn a_fresh_loop_can_be_saved_again_after_a_gap() {
     let directory = temp_dir("lost-then-cleared");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.note_lost_samples();
     assert!(mirror.save(&directory).is_err());
 
@@ -352,8 +394,17 @@ fn a_fresh_loop_can_be_saved_again_after_a_gap() {
     // nothing left for it to be right about. Latching it for the whole
     // session would quietly stop saving anything ever again.
     mirror.clear();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[3, 4]), 2, 0);
-    mirror.save(&directory).expect("a loop recorded since the gap saves");
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
+    mirror
+        .save(&directory)
+        .expect("a loop recorded since the gap saves");
     assert_eq!(load(&directory, &settings(RATE)), vec![s(&[3, 4])]);
 
     let _ = std::fs::remove_dir_all(&directory);
@@ -363,12 +414,26 @@ fn a_fresh_loop_can_be_saved_again_after_a_gap() {
 fn recording_over_a_lost_loop_makes_it_savable_again() {
     let directory = temp_dir("lost-then-rerecorded");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.note_lost_samples();
 
     // No clear in between: a first take replaces the whole loop by
     // itself, so the gap no longer applies to anything held.
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[5, 6, 7]), 3, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[5, 6, 7]),
+        3,
+        0,
+    );
     mirror.save(&directory).expect("saves");
     assert_eq!(load(&directory, &settings(RATE)), vec![s(&[5, 6, 7])]);
 
@@ -379,7 +444,14 @@ fn recording_over_a_lost_loop_makes_it_savable_again() {
 fn a_loop_longer_than_the_setting_now_allows_is_not_loaded() {
     let directory = temp_dir("too-long");
     let (mut input, mut mirror) = new_mirror_at(SLOW);
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2, 3]), 3, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2, 3]),
+        3,
+        0,
+    );
     mirror.save(&directory).expect("saves");
 
     let mut tightened = settings(SLOW);
@@ -399,9 +471,30 @@ fn a_loop_longer_than_the_setting_now_allows_is_not_loaded() {
 fn layers_past_the_setting_are_dropped_and_the_rest_still_load() {
     let directory = temp_dir("too-many");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
-    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[3, 4]), 2, 0);
-    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[5, 6]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[5, 6]),
+        2,
+        0,
+    );
     mirror.save(&directory).expect("saves");
 
     let mut fewer = settings(RATE);
@@ -421,7 +514,14 @@ fn layers_past_the_setting_are_dropped_and_the_rest_still_load() {
 fn a_first_take_that_captured_nothing_clears_the_saved_loop() {
     let directory = temp_dir("empty-retake");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.save(&directory).expect("saves");
     assert_eq!(load(&directory, &settings(RATE)).len(), 1);
 
@@ -446,8 +546,22 @@ fn a_first_take_that_captured_nothing_clears_the_saved_loop() {
 #[test]
 fn redo_puts_the_removed_take_back_on_top() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
-    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[3, 4]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
 
     mirror.remove_last_layer();
     assert!(mirror.can_redo());
@@ -461,11 +575,32 @@ fn redo_puts_the_removed_take_back_on_top() {
 fn a_new_take_forgets_what_redo_could_bring_back() {
     // The layer stack forgets at the same moment; the two must agree.
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
-    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[3, 4]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[3, 4]),
+        2,
+        0,
+    );
     mirror.remove_last_layer();
 
-    record(&mut input, &mut mirror, LoopState::Overdubbing, &s(&[5, 6]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Overdubbing,
+        &s(&[5, 6]),
+        2,
+        0,
+    );
 
     assert!(!mirror.can_redo());
 }
@@ -489,7 +624,14 @@ fn a_first_take_longer_than_the_loop_is_cut_not_wrapped() {
 #[test]
 fn a_first_take_shorter_than_the_loop_ends_in_silence() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 4, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        4,
+        0,
+    );
     assert_eq!(mirror.layers(), vec![s(&[1, 2, 0, 0])]);
 }
 
@@ -509,7 +651,14 @@ fn a_dropped_take_keeps_nothing_and_the_next_still_lines_up() {
     assert!(!out_of_date, "nothing to save");
     assert!(mirror.layers().is_empty());
 
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[5, 6]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[5, 6]),
+        2,
+        0,
+    );
     assert_eq!(mirror.layers(), vec![s(&[5, 6])]);
 }
 
@@ -535,7 +684,14 @@ fn a_count_in_take_becomes_the_loop() {
 fn a_count_in_called_off_before_its_take_leaves_redo_alone() {
     // No take opened, so nothing on the audio thread forgot anything.
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.remove_last_layer();
     mirror.tick(LoopState::Idle);
 
@@ -550,7 +706,14 @@ fn a_first_take_dropped_after_opening_forgets_redo_too() {
     // Opening it wiped the stack's - so redo here would bring back a
     // layer the stack no longer has.
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     mirror.remove_last_layer();
     mirror.tick(LoopState::Arming);
     input.end(TakeEnd::Dropped {
@@ -578,7 +741,14 @@ fn saving_the_layers_leaves_the_tempo_alone() {
     // an overdub, mustn't take it away.
     let dir = temp_dir("mirror-beats-layers");
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     save_beats(&dir, 4).expect("written");
 
     mirror.save(&dir).expect("saved");
@@ -631,7 +801,14 @@ fn recording_straight_into_a_dub_makes_two_takes() {
 #[test]
 fn a_clear_from_the_audio_thread_empties_the_copy() {
     let (mut input, mut mirror) = new_mirror();
-    record(&mut input, &mut mirror, LoopState::Recording, &s(&[1, 2]), 2, 0);
+    record(
+        &mut input,
+        &mut mirror,
+        LoopState::Recording,
+        &s(&[1, 2]),
+        2,
+        0,
+    );
     input.end(TakeEnd::Cleared);
     let out_of_date = mirror.tick(LoopState::Idle);
     assert!(out_of_date);

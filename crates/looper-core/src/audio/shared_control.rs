@@ -176,7 +176,6 @@ impl SharedControl {
         self.take_open.load(Ordering::Acquire)
     }
 
-
     /// Drains the count of samples lost since the last call.
     pub fn take_capture_lost(&self) -> usize {
         self.capture_lost.swap(0, Ordering::Relaxed)
@@ -240,7 +239,6 @@ impl SharedControl {
     pub(super) fn take_redo_layer_request(&self) -> bool {
         self.redo_layer_requested.swap(false, Ordering::AcqRel)
     }
-
 
     pub(super) fn note_capture_lost(&self, samples: usize) {
         self.capture_lost.fetch_add(samples, Ordering::Relaxed);

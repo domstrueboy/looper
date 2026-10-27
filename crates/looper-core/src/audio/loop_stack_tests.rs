@@ -45,7 +45,11 @@ fn first_layer_stops_at_capacity() {
     let mut stack = LoopStack::new(4, MAX_LAYERS);
     stack.begin_first_layer();
     stack.record_first_layer(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
-    assert_eq!(stack.recorded_len(), 4, "the overflow is dropped, not wrapped");
+    assert_eq!(
+        stack.recorded_len(),
+        4,
+        "the overflow is dropped, not wrapped"
+    );
     stack.finish_first_layer();
     assert_eq!(stack.recorded_len(), 4);
 }

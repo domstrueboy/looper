@@ -84,7 +84,6 @@ impl LoopStateMachine {
         };
     }
 
-
     /// Long-press: clears the loop from any state, back to Idle. How long
     /// a hold that takes is `long_press_ms`, and `InputHandler`'s to
     /// measure.

@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 use ringbuf::HeapCons;
-use serde::{Deserialize, Serialize};
 use ringbuf::traits::Consumer;
+use serde::{Deserialize, Serialize};
 
-use crate::state_machine::LoopState;
 use crate::config::AppConfig;
+use crate::state_machine::LoopState;
 use crate::wav;
 
 /// More layers than any config allows, so a stale file from a bigger

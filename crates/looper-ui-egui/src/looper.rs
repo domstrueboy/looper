@@ -1,9 +1,9 @@
 use looper_core::action::Action;
 use looper_core::config::{CLICK_VOLUME_PCT_RANGE, Mode, RecordMode, VOLUME_PCT_RANGE};
 
+use crate::indicator;
 use looper_core::looper::LooperState;
 use std::time::Instant;
-use crate::indicator;
 
 /// The secondary buttons share a size, so the row can be measured and
 /// centered without laying it out twice. Three of them fit the window.
@@ -109,8 +109,7 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
 
                 // Button and spacebar feed one InputHandler (see
                 // `LooperState::tick`), so they can't desync.
-                let label =
-                    indicator::press_button_label(&readout, looper.is_long_press_active());
+                let label = indicator::press_button_label(&readout, looper.is_long_press_active());
                 let button_response = ui.add_sized(
                     [90.0, 90.0],
                     egui::Button::new(egui::RichText::new(label).size(32.0)).corner_radius(45),
@@ -235,7 +234,12 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
             i.events.iter().any(|event| {
                 matches!(
                     event,
-                    egui::Event::Key { key: egui::Key::T, pressed: true, repeat: false, .. }
+                    egui::Event::Key {
+                        key: egui::Key::T,
+                        pressed: true,
+                        repeat: false,
+                        ..
+                    }
                 )
             }),
         )
@@ -248,70 +252,84 @@ fn metronome_row(ui: &mut egui::Ui, looper: &mut LooperState, toggle_pressed: bo
         METRONOME_BUTTON_SIZE[1],
     );
     let from_loop = looper.tempo_is_the_loops();
-    ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        let (label, hint, enabled) = if from_loop {
-            ("½", "Half the tempo (,)", looper.can_halve_tempo())
-        } else {
-            ("−", "Slower (,)", true)
-        };
-        let slower = ui
-            .add_enabled(enabled, egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()))
-            .on_hover_text(hint);
-        if slower.clicked() || (slower_pressed && enabled) {
-            if from_loop {
-                looper.halve_tempo();
+    ui.allocate_ui_with_layout(
+        row,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            let (label, hint, enabled) = if from_loop {
+                ("½", "Half the tempo (,)", looper.can_halve_tempo())
             } else {
-                looper.change_metronome_bpm(-1);
+                ("−", "Slower (,)", true)
+            };
+            let slower = ui
+                .add_enabled(
+                    enabled,
+                    egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()),
+                )
+                .on_hover_text(hint);
+            if slower.clicked() || (slower_pressed && enabled) {
+                if from_loop {
+                    looper.halve_tempo();
+                } else {
+                    looper.change_metronome_bpm(-1);
+                }
             }
-        }
 
-        // A loop's tempo is rarely whole, and shown to a tenth so it
-        // reads as measured rather than chosen.
-        let tempo = if from_loop {
-            format!("{:.1}", looper.tempo())
-        } else {
-            format!("{}", looper.tempo())
-        };
-        let toggle = egui::Button::selectable(
-            looper.is_metronome_on(),
-            format!("Metronome {tempo} BPM (M)"),
-        );
-        let toggle = ui.add_sized(METRONOME_BUTTON_SIZE, toggle);
-        let toggle = if from_loop {
-            toggle.on_hover_text("Tempo taken from the loop")
-        } else {
-            toggle
-        };
-        if toggle.clicked() || toggle_pressed {
-            looper.toggle_metronome();
-        }
-
-        let (label, hint, enabled) = if from_loop {
-            ("2×", "Double the tempo (.)", looper.can_double_tempo())
-        } else {
-            ("+", "Faster (.)", true)
-        };
-        let faster = ui
-            .add_enabled(enabled, egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()))
-            .on_hover_text(hint);
-        if faster.clicked() || (faster_pressed && enabled) {
-            if from_loop {
-                looper.double_tempo();
+            // A loop's tempo is rarely whole, and shown to a tenth so it
+            // reads as measured rather than chosen.
+            let tempo = if from_loop {
+                format!("{:.1}", looper.tempo())
             } else {
-                looper.change_metronome_bpm(1);
+                format!("{}", looper.tempo())
+            };
+            let toggle = egui::Button::selectable(
+                looper.is_metronome_on(),
+                format!("Metronome {tempo} BPM (M)"),
+            );
+            let toggle = ui.add_sized(METRONOME_BUTTON_SIZE, toggle);
+            let toggle = if from_loop {
+                toggle.on_hover_text("Tempo taken from the loop")
+            } else {
+                toggle
+            };
+            if toggle.clicked() || toggle_pressed {
+                looper.toggle_metronome();
             }
-        }
 
-        // On the way down, like the pedals: a tap's time is when it
-        // landed, and a click's release comes a varying while later.
-        let tap = ui
-            .add_enabled(!from_loop, egui::Button::new("Tap (T)").min_size(TAP_BUTTON_SIZE.into()))
-            .on_hover_text("Tap the beat, two or more times");
-        let tap_down = tap.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_pressed());
-        if tap_down || (tap_pressed && !from_loop) {
-            looper.tap_tempo(Instant::now());
-        }
-    });
+            let (label, hint, enabled) = if from_loop {
+                ("2×", "Double the tempo (.)", looper.can_double_tempo())
+            } else {
+                ("+", "Faster (.)", true)
+            };
+            let faster = ui
+                .add_enabled(
+                    enabled,
+                    egui::Button::new(label).min_size(TEMPO_BUTTON_SIZE.into()),
+                )
+                .on_hover_text(hint);
+            if faster.clicked() || (faster_pressed && enabled) {
+                if from_loop {
+                    looper.double_tempo();
+                } else {
+                    looper.change_metronome_bpm(1);
+                }
+            }
+
+            // On the way down, like the pedals: a tap's time is when it
+            // landed, and a click's release comes a varying while later.
+            let tap = ui
+                .add_enabled(
+                    !from_loop,
+                    egui::Button::new("Tap (T)").min_size(TAP_BUTTON_SIZE.into()),
+                )
+                .on_hover_text("Tap the beat, two or more times");
+            let tap_down =
+                tap.is_pointer_button_down_on() && ui.input(|i| i.pointer.primary_pressed());
+            if tap_down || (tap_pressed && !from_loop) {
+                looper.tap_tempo(Instant::now());
+            }
+        },
+    );
 }
 
 /// Loop and click level, live: heard while dragging, saved when let go.
@@ -398,18 +416,22 @@ fn layer_row(ui: &mut egui::Ui, looper: &mut LooperState) {
         count as f32 * (LAYER_BUTTON_SIZE[0] + spacing) - spacing,
         LAYER_BUTTON_SIZE[1],
     );
-    ui.allocate_ui_with_layout(row, egui::Layout::left_to_right(egui::Align::Center), |ui| {
-        for index in 0..count {
-            let playing = !looper.is_layer_muted(index);
-            let button = egui::Button::selectable(playing, (index + 1).to_string());
-            let clicked = ui
-                .add_sized(LAYER_BUTTON_SIZE, button)
-                .on_hover_text(if playing { "Mute" } else { "Unmute" })
-                .clicked();
-            if clicked || key_pressed == Some(index) {
-                looper.toggle_layer_mute(index);
+    ui.allocate_ui_with_layout(
+        row,
+        egui::Layout::left_to_right(egui::Align::Center),
+        |ui| {
+            for index in 0..count {
+                let playing = !looper.is_layer_muted(index);
+                let button = egui::Button::selectable(playing, (index + 1).to_string());
+                let clicked = ui
+                    .add_sized(LAYER_BUTTON_SIZE, button)
+                    .on_hover_text(if playing { "Mute" } else { "Unmute" })
+                    .clicked();
+                if clicked || key_pressed == Some(index) {
+                    looper.toggle_layer_mute(index);
+                }
             }
-        }
-    });
+        },
+    );
     ui.label(format!("1-{count}: mute / unmute a layer"));
 }

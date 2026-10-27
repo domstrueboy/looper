@@ -108,8 +108,14 @@ fn main() {
     let backend = backends
         .get(input.id.backend)
         .expect("the backend that listed it");
-    let in_rates = backend.caps(&input).map(|c| c.sample_rates).unwrap_or_default();
-    let out_rates = backend.caps(&output).map(|c| c.sample_rates).unwrap_or_default();
+    let in_rates = backend
+        .caps(&input)
+        .map(|c| c.sample_rates)
+        .unwrap_or_default();
+    let out_rates = backend
+        .caps(&output)
+        .map(|c| c.sample_rates)
+        .unwrap_or_default();
     let Some(sample_rate) = in_rates.iter().copied().find(|r| out_rates.contains(r)) else {
         println!("no rate both ends agree on: in {in_rates:?}, out {out_rates:?}");
         return;
@@ -149,8 +155,14 @@ fn main() {
     let captured = Arc::new(Meter::default());
     let rendered = Arc::new(Meter::default());
     let stream = match open.start(
-        Box::new(Capture(Arc::clone(&captured), format.input_channels as usize)),
-        Box::new(Silence(Arc::clone(&rendered), format.output_channels as usize)),
+        Box::new(Capture(
+            Arc::clone(&captured),
+            format.input_channels as usize,
+        )),
+        Box::new(Silence(
+            Arc::clone(&rendered),
+            format.output_channels as usize,
+        )),
         Arc::new(|err| eprintln!("  stream error: {err}")),
     ) {
         Ok(stream) => stream,

@@ -23,7 +23,10 @@ fn fires_once_when_the_wait_runs_out() {
     let t0 = Instant::now();
     preroll.start(t0);
 
-    assert!(!preroll.take_if_elapsed(t0 + Duration::from_secs(4)), "early");
+    assert!(
+        !preroll.take_if_elapsed(t0 + Duration::from_secs(4)),
+        "early"
+    );
     assert!(preroll.take_if_elapsed(t0 + WAIT));
     // Recording has started; firing again would restart it.
     assert!(!preroll.take_if_elapsed(t0 + Duration::from_secs(6)));
@@ -60,7 +63,10 @@ fn the_readout_counts_down_and_stops_at_zero() {
     preroll.start(t0);
 
     assert_eq!(preroll.remaining_secs(t0), 5.0);
-    assert_eq!(preroll.remaining_secs(t0 + Duration::from_millis(1500)), 3.5);
+    assert_eq!(
+        preroll.remaining_secs(t0 + Duration::from_millis(1500)),
+        3.5
+    );
     // A frame landing past the end must not read as negative.
     assert_eq!(preroll.remaining_secs(t0 + Duration::from_secs(9)), 0.0);
 }
@@ -73,7 +79,11 @@ fn the_bar_fills_from_zero_to_one() {
 
     assert_eq!(preroll.progress(t0), 0.0);
     assert_eq!(preroll.progress(t0 + Duration::from_millis(2500)), 0.5);
-    assert_eq!(preroll.progress(t0 + Duration::from_secs(9)), 1.0, "clamped");
+    assert_eq!(
+        preroll.progress(t0 + Duration::from_secs(9)),
+        1.0,
+        "clamped"
+    );
 }
 
 #[test]

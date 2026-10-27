@@ -5,7 +5,10 @@ struct Capture(std::sync::Arc<std::sync::Mutex<Vec<f32>>>);
 
 impl InputProcessor for Capture {
     fn process(&mut self, input: &[f32]) {
-        self.0.lock().expect("not poisoned").extend_from_slice(input);
+        self.0
+            .lock()
+            .expect("not poisoned")
+            .extend_from_slice(input);
     }
 }
 
@@ -21,7 +24,11 @@ impl OutputProcessor for Tone {
 
 type Heard = std::sync::Arc<std::sync::Mutex<Vec<f32>>>;
 
-fn start(driver: &MockDriver, backend: &MockBackend, sample_rate: u32) -> (Box<dyn AudioStream>, Heard) {
+fn start(
+    driver: &MockDriver,
+    backend: &MockBackend,
+    sample_rate: u32,
+) -> (Box<dyn AudioStream>, Heard) {
     let heard: Heard = Heard::default();
     let open = backend.open(&request(sample_rate)).expect("opens");
     let (sink, _log) = driver.error_sink();
@@ -119,7 +126,11 @@ fn starting_runs_both_callbacks_in_driver_order() {
         &[0.25, 0.5, 0.75, 1.0],
         "the capture callback saw what the driver handed over"
     );
-    assert_eq!(out, vec![0.5; 4], "and the render callback's buffer came back");
+    assert_eq!(
+        out,
+        vec![0.5; 4],
+        "and the render callback's buffer came back"
+    );
 }
 
 #[test]

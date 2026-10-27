@@ -63,7 +63,8 @@ impl Metronome {
     /// first bar - where a count-in's take opens. `None` once past it.
     pub fn frames_to_bar_line(&self) -> Option<usize> {
         let line = self.bar_frames().round() as u64;
-        line.checked_sub(self.free_pos).map(|frames| frames as usize)
+        line.checked_sub(self.free_pos)
+            .map(|frames| frames as usize)
     }
 
     pub fn set_gain(&mut self, gain: f32) {
@@ -99,13 +100,22 @@ impl Metronome {
     fn add_from(&mut self, out: &mut [f32], start: u64) {
         let mut done = 0;
         for beat in self.scheduler.events(start, out.len()) {
-            let sound = if self.accented { &self.accent } else { &self.click };
-            self.voice.add_into(sound, &mut out[done..beat.offset], self.gain);
+            let sound = if self.accented {
+                &self.accent
+            } else {
+                &self.click
+            };
+            self.voice
+                .add_into(sound, &mut out[done..beat.offset], self.gain);
             self.voice.trigger();
             self.accented = beat.step == 0;
             done = beat.offset;
         }
-        let sound = if self.accented { &self.accent } else { &self.click };
+        let sound = if self.accented {
+            &self.accent
+        } else {
+            &self.click
+        };
         self.voice.add_into(sound, &mut out[done..], self.gain);
     }
 }

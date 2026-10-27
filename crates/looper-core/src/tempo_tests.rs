@@ -37,7 +37,11 @@ fn every_guess_sits_inside_the_guess_range() {
     // beat, and there's nothing smaller to guess.
     for tenths in 5..400 {
         let tempo = LoopTempo::guess(secs(f64::from(tenths) / 10.0), RATE, 4);
-        assert!(GUESS_BPM.contains(&tempo.bpm()), "{tenths}: {}", tempo.bpm());
+        assert!(
+            GUESS_BPM.contains(&tempo.bpm()),
+            "{tenths}: {}",
+            tempo.bpm()
+        );
     }
 }
 
@@ -93,4 +97,3 @@ fn a_loop_shorter_than_a_bar_guesses_fewer_beats() {
     let tempo = LoopTempo::guess(secs(1.0), RATE, 4);
     assert_eq!((tempo.beats(), tempo.bpm()), (2, 120.0));
 }
-

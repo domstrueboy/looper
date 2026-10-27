@@ -137,8 +137,14 @@ pub struct StreamFormat {
 pub enum HalError {
     /// The backend itself isn't there - no driver installed, or no
     /// subsystem to talk to.
-    BackendUnavailable { backend: BackendId, detail: String },
-    DeviceNotFound { backend: BackendId, device: String },
+    BackendUnavailable {
+        backend: BackendId,
+        detail: String,
+    },
+    DeviceNotFound {
+        backend: BackendId,
+        device: String,
+    },
     /// An input from one backend and an output from another. They would
     /// have separate clocks and no way to agree on a buffer size.
     CrossBackend {
@@ -168,7 +174,9 @@ impl fmt::Display for HalError {
                 f,
                 "input is {input} and output is {output}; they must be the same"
             ),
-            Self::Enumeration(detail) => write!(f, "could not list what the device supports: {detail}"),
+            Self::Enumeration(detail) => {
+                write!(f, "could not list what the device supports: {detail}")
+            }
             Self::UnsupportedConfig(detail) => write!(f, "{detail}"),
             Self::OpenFailed(detail) => write!(f, "could not open the device: {detail}"),
             Self::StartFailed(detail) => write!(f, "could not start the stream: {detail}"),

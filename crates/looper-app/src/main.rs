@@ -17,7 +17,9 @@ use looper_hal::{Backends, cpal_backend::default_backends};
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let action = match &mut self.screen {
-            Screen::Settings(settings) => looper_ui_egui::settings::render(ui, settings, &self.backends),
+            Screen::Settings(settings) => {
+                looper_ui_egui::settings::render(ui, settings, &self.backends)
+            }
             Screen::Looper(looper) => {
                 // Long-press detection and the pre-roll countdown need
                 // continuous frames, not just input-triggered repaints.
@@ -59,10 +61,11 @@ fn fit_height_to_content(ui: &egui::Ui) {
     };
     // A pixel of slack, or rounding would resize it every frame.
     if (current.height() - wanted).abs() > 1.0 {
-        ui.ctx().send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-            current.width(),
-            wanted,
-        )));
+        ui.ctx()
+            .send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                current.width(),
+                wanted,
+            )));
     }
 }
 

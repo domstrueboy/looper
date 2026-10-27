@@ -1,7 +1,8 @@
 use looper_core::action::Action;
 use looper_core::config::{
-    DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode, TimeSignature,
+    DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE,
+    MAX_LOOP_SECS_RANGE, METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode,
+    TimeSignature,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -35,7 +36,8 @@ pub fn render(
             let can_start = egui::ScrollArea::vertical()
                 .max_height((ui.available_height() - START_ROW_HEIGHT).max(120.0))
                 .show(ui, |ui| {
-                    ui.vertical_centered(|ui| controls(ui, settings, backends)).inner
+                    ui.vertical_centered(|ui| controls(ui, settings, backends))
+                        .inner
                 })
                 .inner;
 
@@ -140,10 +142,7 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
     }
 
     if settings.sample_rates.is_empty() {
-        ui.colored_label(
-            egui::Color32::RED,
-            "No sample rate both ends agree on.",
-        );
+        ui.colored_label(egui::Color32::RED, "No sample rate both ends agree on.");
         return false;
     }
 
@@ -203,8 +202,12 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
         }
         ui.radio_value(&mut config.record_start, RecordStart::CountIn, "Count-in")
             .on_hover_text("A bar of clicks, then recording starts on the bar line");
-        ui.radio_value(&mut config.record_start, RecordStart::Detect, "When you play")
-            .on_hover_text("Recording starts at your first note");
+        ui.radio_value(
+            &mut config.record_start,
+            RecordStart::Detect,
+            "When you play",
+        )
+        .on_hover_text("Recording starts at your first note");
         if config.record_start == RecordStart::Detect {
             ui.add(
                 egui::Slider::new(&mut config.detect_db, DETECT_DB_RANGE)
@@ -261,8 +264,12 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
             .on_hover_text("The take plays; Space then dubs and plays in turn");
         ui.radio_value(mode, RecordMode::RecDub, "REC > DUB")
             .on_hover_text("The take goes straight into a dub; Space then dubs the next layer");
-        ui.radio_value(mode, RecordMode::RecDubPerPass, "REC > DUB, a layer per pass")
-            .on_hover_text("The take goes straight into a dub; every pass is a layer of its own");
+        ui.radio_value(
+            mode,
+            RecordMode::RecDubPerPass,
+            "REC > DUB, a layer per pass",
+        )
+        .on_hover_text("The take goes straight into a dub; every pass is a layer of its own");
     });
 
     ui.add_space(8.0);

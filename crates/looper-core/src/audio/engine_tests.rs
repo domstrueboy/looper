@@ -92,7 +92,10 @@ fn overdub_offset(latency_ms: u32) -> f32 {
         latency_ms,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     // Silence until the loop exists, so the layer underneath the overdub
@@ -183,7 +186,11 @@ fn no_delay_leaves_the_signal_alone() {
     let mut delay = MonitorDelay::new(0);
     let mut samples = [1.0, 2.0, 3.0];
     delay.apply(&mut samples);
-    assert_eq!(samples, [1.0, 2.0, 3.0], "a zero-latency setting is not possible, but still");
+    assert_eq!(
+        samples,
+        [1.0, 2.0, 3.0],
+        "a zero-latency setting is not possible, but still"
+    );
 }
 
 /// The layer stack and the UI thread's copy are laid out by two separate
@@ -193,7 +200,10 @@ fn no_delay_leaves_the_signal_alone() {
 #[test]
 fn the_mirror_is_fed_exactly_what_the_stack_records() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     control.publish_state(LoopState::Recording);
@@ -204,7 +214,11 @@ fn the_mirror_is_fed_exactly_what_the_stack_records() {
 
     let mut mirrored = vec![0.0f32; BLOCK * 8];
     let m = captured.samples.pop_slice(&mut mirrored);
-    assert_eq!(m, path.output.stack.recorded_len(), "all of it, and no more");
+    assert_eq!(
+        m,
+        path.output.stack.recorded_len(),
+        "all of it, and no more"
+    );
     // Held back by the 8-sample monitoring delay, like the take itself.
     let expected: Vec<f32> = (0..m)
         .map(|i| if i < 8 { 0.0 } else { (i - 7) as f32 })
@@ -224,7 +238,10 @@ fn a_count_in_opens_the_take_on_the_bar_line() {
         record_start: RecordStart::CountIn,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     control.publish_state(LoopState::Arming);
@@ -246,7 +263,10 @@ fn a_delay_records_nothing_while_it_runs() {
     // Timed on the UI thread, which publishes Recording itself when it
     // runs out - the metronome being on changes nothing.
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     control.publish_state(LoopState::Arming);
@@ -265,7 +285,10 @@ fn a_delay_records_nothing_while_it_runs() {
 fn a_callback_larger_than_the_monitoring_delay_is_not_dropped() {
     let settings = test_settings();
     let latency_frames = (settings.latency_ms as usize * TEST_RATE as usize) / 1_000;
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
 
     let frames = latency_frames * 4;
@@ -273,14 +296,20 @@ fn a_callback_larger_than_the_monitoring_delay_is_not_dropped() {
     path.input.process(&input);
 
     let (_, spilled) = control.take_underrun_counts();
-    assert_eq!(spilled, 0, "the passthrough ring could not hold one callback");
+    assert_eq!(
+        spilled, 0,
+        "the passthrough ring could not hold one callback"
+    );
 
     let mut out = vec![0.0f32; frames];
     path.output.process(&mut out);
 
     let mut expected = vec![0.0f32; latency_frames];
     expected.extend_from_slice(&input[..frames - latency_frames]);
-    assert_eq!(out, expected, "delayed by the monitoring delay, otherwise whole");
+    assert_eq!(
+        out, expected,
+        "delayed by the monitoring delay, otherwise whole"
+    );
 }
 
 /// The two ends need not carry the same number of channels - a capture
@@ -291,7 +320,10 @@ fn a_callback_larger_than_the_monitoring_delay_is_not_dropped() {
 fn the_input_and_output_channel_counts_are_independent() {
     let settings = test_settings();
     let latency_frames = (settings.latency_ms as usize * TEST_RATE as usize) / 1_000;
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 2, &[]);
 
     // One mono channel in, two out, and long enough to push the
@@ -305,7 +337,11 @@ fn the_input_and_output_channel_counts_are_independent() {
 
     let first = latency_frames * 2;
     assert_eq!(out[first], input[0], "delayed by the monitoring delay");
-    assert_eq!(out[first], out[first + 1], "and centred across both channels");
+    assert_eq!(
+        out[first],
+        out[first + 1],
+        "and centred across both channels"
+    );
 }
 
 #[test]
@@ -316,7 +352,10 @@ fn a_count_in_called_off_after_its_take_opened_leaves_no_loop() {
         record_start: RecordStart::CountIn,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     control.publish_state(LoopState::Arming);
     let mut next = 1.0;
@@ -346,7 +385,10 @@ fn a_take_ends_with_a_count_of_exactly_its_samples() {
     // What the UI thread's copy splits its stream by - so it has to be
     // what was passed on, to the sample, not what the state change said.
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
 
@@ -369,7 +411,10 @@ fn a_take_ends_with_a_count_of_exactly_its_samples() {
 #[test]
 fn recording_into_a_dub_reports_two_takes_split_where_the_stack_split_them() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
 
@@ -402,7 +447,10 @@ fn recording_into_a_dub_reports_two_takes_split_where_the_stack_split_them() {
 #[test]
 fn an_abandoned_dub_is_reported_dropped() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
 
@@ -426,7 +474,11 @@ fn an_abandoned_dub_is_reported_dropped() {
             first: false,
         })
     );
-    assert_eq!(path.output.stack.layer_count(), 1, "and gone from the stack");
+    assert_eq!(
+        path.output.stack.layer_count(),
+        1,
+        "and gone from the stack"
+    );
 }
 
 /// A first take played round once, then a dub of one block.
@@ -444,7 +496,10 @@ fn dubbing(control: &Arc<SharedControl>, path: &mut AudioPath, next: &mut f32) {
 #[test]
 fn a_next_layer_request_splits_the_dub_where_it_lands() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
     dubbing(&control, &mut path, &mut next);
@@ -478,7 +533,10 @@ fn a_take_back_arriving_with_its_next_layer_drops_only_the_new_one() {
     // A double press in REC→DUB, both halves inside one block: the split
     // has to happen before the abandon, or it'd drop the layer before.
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
     dubbing(&control, &mut path, &mut next);
@@ -502,7 +560,10 @@ fn a_take_back_arriving_with_its_next_layer_drops_only_the_new_one() {
 #[test]
 fn a_clear_reports_the_open_take_dropped_then_cleared() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, mut captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
 
@@ -536,7 +597,10 @@ fn dubbing_per_pass(max_layers: u32) -> (Arc<SharedControl>, AudioPath, Capture,
         max_layers,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
     control.publish_state(LoopState::Recording);
@@ -603,7 +667,10 @@ fn with_every_layer_used_the_last_keeps_taking_passes() {
 #[test]
 fn without_a_layer_per_pass_a_dub_runs_on_into_the_next_pass() {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
     dubbing(&control, &mut path, &mut next);
@@ -614,7 +681,11 @@ fn without_a_layer_per_pass_a_dub_runs_on_into_the_next_pass() {
     control.publish_state(LoopState::Looping);
     drive(&mut path, &ramp(&mut next));
 
-    assert_eq!(path.output.stack.layer_count(), 2, "one layer, however many passes");
+    assert_eq!(
+        path.output.stack.layer_count(),
+        2,
+        "one layer, however many passes"
+    );
 }
 
 // --- Detect -----------------------------------------------------------------
@@ -627,7 +698,10 @@ fn detecting() -> (Arc<SharedControl>, AudioPath, Capture) {
         detect_db: -20,
         ..test_settings()
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (path, captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     control.publish_state(LoopState::Arming);
     (control, path, captured)
@@ -646,7 +720,11 @@ fn detect_opens_the_take_just_before_the_first_note() {
     for block in 0..20 {
         drive(&mut path, &quiet(1 + block * BLOCK, BLOCK));
     }
-    assert_eq!(path.output.stack.recorded_len(), 0, "nothing loud enough yet");
+    assert_eq!(
+        path.output.stack.recorded_len(),
+        0,
+        "nothing loud enough yet"
+    );
     for _ in 0..5 {
         drive(&mut path, &[0.5; BLOCK]);
     }
@@ -685,7 +763,10 @@ fn playing(settings: AppConfig) -> (Arc<SharedControl>, AudioPath) {
         volume_pct: 100,
         ..settings
     };
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     let mut next = 1.0;
     control.publish_state(LoopState::Recording);
@@ -713,7 +794,11 @@ fn a_stop_at_the_loop_end_plays_to_the_top_and_holds_there() {
 
     let out = drive(&mut path, &[0.0; BLOCK]);
     assert!(out.iter().all(|&s| s == 0.0), "silent");
-    assert_eq!(path.output.stack.play_pos(), 0, "held at the top for the next play");
+    assert_eq!(
+        path.output.stack.play_pos(),
+        0,
+        "held at the top for the next play"
+    );
 }
 
 #[test]
@@ -756,7 +841,11 @@ fn a_called_off_stop_plays_on_from_where_it_held() {
     control.cancel_stop();
     drive(&mut path, &[0.0; BLOCK]);
 
-    assert_eq!(path.output.stack.play_pos(), BLOCK, "moving again, from the top");
+    assert_eq!(
+        path.output.stack.play_pos(),
+        BLOCK,
+        "moving again, from the top"
+    );
 }
 
 // --- Levels -----------------------------------------------------------------
@@ -764,11 +853,16 @@ fn a_called_off_stop_plays_on_from_where_it_held() {
 /// The first blocks of the click on its own, at `click_pct`.
 fn clicking_at(click_pct: u32) -> Vec<f32> {
     let settings = test_settings();
-    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let control = Arc::new(SharedControl::new(
+        settings.volume_pct,
+        settings.metronome_bpm,
+    ));
     let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
     control.publish_metronome_on(true);
     control.publish_click_volume_pct(click_pct);
-    (0..8).flat_map(|_| drive(&mut path, &[0.0; BLOCK])).collect()
+    (0..8)
+        .flat_map(|_| drive(&mut path, &[0.0; BLOCK]))
+        .collect()
 }
 
 #[test]
@@ -780,4 +874,3 @@ fn the_click_plays_at_its_level() {
     assert_eq!(clicking_at(200), doubled);
     assert!(clicking_at(0).iter().all(|&s| s == 0.0));
 }
-

@@ -45,11 +45,15 @@ fn it_has_the_pitch_it_claims() {
 #[test]
 fn the_accent_is_the_same_tick_higher() {
     // Same length and shape, more cycles in it.
-    let crossings = |sound: &[f32]| sound.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+    let crossings = |sound: &[f32]| {
+        sound
+            .windows(2)
+            .filter(|w| w[0] < 0.0 && w[1] >= 0.0)
+            .count()
+    };
     assert_eq!(accent(48_000).len(), click(48_000).len());
     // Counted to within a crossing: a cycle's end lands on zero, and
     // rounding puts it either side.
     let ratio = crossings(&accent(48_000)) as f32 / crossings(&click(48_000)) as f32;
     assert!((ratio - 1.5).abs() < 0.1, "a fifth up, got {ratio}");
 }
-

@@ -168,4 +168,3 @@ fn can_record_again_after_clear() {
     sm.press();
     assert_eq!(sm.state(), LoopState::Recording);
 }
-

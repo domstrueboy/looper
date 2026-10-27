@@ -1,0 +1,3 @@
+# LF whatever the editor saved: `.gitattributes` keeps the index LF, and
+# this keeps `cargo fmt` from preserving a CRLF working copy.
+newline_style = "Unix"

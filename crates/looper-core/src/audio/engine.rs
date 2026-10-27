@@ -227,13 +227,7 @@ impl OutputPath {
                     .then(|| self.metronome.bar_frames());
                 let abandon = self.control.take_abandon_take_request();
                 let before = self.stack.open_take();
-                apply_state_change(
-                    &mut self.stack,
-                    self.previous_state,
-                    state,
-                    bar,
-                    abandon,
-                );
+                apply_state_change(&mut self.stack, self.previous_state, state, bar, abandon);
                 if let Some(ended) = before
                     && self.stack.open_take().map(|t| t.index) != Some(ended.index)
                 {
@@ -282,7 +276,8 @@ impl OutputPath {
                 LoopState::Recording => {
                     let n = self.recorder.pop_slice(&mut self.recorded[..frames]);
                     self.stack.record_first_layer(&self.recorded[..n]);
-                    self.take_samples += pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
+                    self.take_samples +=
+                        pass_on(&mut self.capture, &self.control, &self.recorded[..n]);
                 }
                 LoopState::Arming => {
                     // Drained whether or not any of it is kept, so it
@@ -295,9 +290,10 @@ impl OutputPath {
                             // The count-in's bar line: the take opens on
                             // it, to the frame, and what came before is
                             // dropped.
-                            RecordStart::CountIn => {
-                                self.metronome.frames_to_bar_line().filter(|&at| at < frames)
-                            }
+                            RecordStart::CountIn => self
+                                .metronome
+                                .frames_to_bar_line()
+                                .filter(|&at| at < frames),
                             RecordStart::Detect => self.detector.find(&self.recorded[..n]),
                             RecordStart::Instant | RecordStart::Delay => None,
                         }
@@ -330,7 +326,10 @@ impl OutputPath {
                         // next layer starts on the very next sample.
                         let mut done = 0;
                         while done < frames {
-                            let left = self.layer_per_pass.then(|| self.stack.pass_left()).flatten();
+                            let left = self
+                                .layer_per_pass
+                                .then(|| self.stack.pass_left())
+                                .flatten();
                             if left == Some(0) {
                                 next_layer(
                                     &mut self.stack,
@@ -342,9 +341,13 @@ impl OutputPath {
                             }
                             let end = left.map_or(frames, |left| frames.min(done + left));
                             let recorded = &self.recorded[done..end];
-                            self.stack
-                                .read_mixed_with_overdub(&mut self.loop_out[done..end], recorded, gain);
-                            self.take_samples += pass_on(&mut self.capture, &self.control, recorded);
+                            self.stack.read_mixed_with_overdub(
+                                &mut self.loop_out[done..end],
+                                recorded,
+                                gain,
+                            );
+                            self.take_samples +=
+                                pass_on(&mut self.capture, &self.control, recorded);
                             done = end;
                         }
                     } else {
@@ -382,7 +385,9 @@ impl OutputPath {
                                     self.control.note_stop_done();
                                 }
                             }
-                            Some(StopMode::Immediate) | None => self.stack.read_mixed(loop_out, gain),
+                            Some(StopMode::Immediate) | None => {
+                                self.stack.read_mixed(loop_out, gain)
+                            }
                         }
                     }
                     mix_add(dry, &self.loop_out[..frames]);
@@ -497,7 +502,10 @@ impl Detector {
         if start + wanted <= len {
             [&self.lookback[start..start + wanted], &[]]
         } else {
-            [&self.lookback[start..], &self.lookback[..start + wanted - len]]
+            [
+                &self.lookback[start..],
+                &self.lookback[..start + wanted - len],
+            ]
         }
     }
 }
@@ -589,7 +597,10 @@ pub fn build_audio_path(
         // Anything `loop_mirror::load` handed back fits by construction.
         // Dropping one quietly here would leave the UI thread's copy
         // holding layers that aren't playing.
-        debug_assert!(added, "a restored layer should fit the settings it was loaded for");
+        debug_assert!(
+            added,
+            "a restored layer should fit the settings it was loaded for"
+        );
     }
 
     let path = AudioPath {

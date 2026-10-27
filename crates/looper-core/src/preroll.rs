@@ -63,10 +63,9 @@ impl Preroll {
     /// when nothing is counting down.
     pub fn progress(&self, now: Instant) -> f32 {
         match self.started_at {
-            Some(started_at) if self.is_enabled() => {
-                (now.duration_since(started_at).as_secs_f32() / self.duration.as_secs_f32())
-                    .clamp(0.0, 1.0)
-            }
+            Some(started_at) if self.is_enabled() => (now.duration_since(started_at).as_secs_f32()
+                / self.duration.as_secs_f32())
+            .clamp(0.0, 1.0),
             _ => 0.0,
         }
     }

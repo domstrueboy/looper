@@ -144,7 +144,11 @@ fn a_second_press_soon_after_is_a_double() {
     let mut input = handler();
     let t0 = Instant::now();
 
-    assert_eq!(input.update(true, t0), InputEvent::Press, "acted on at once");
+    assert_eq!(
+        input.update(true, t0),
+        InputEvent::Press,
+        "acted on at once"
+    );
     input.update(false, t0 + Duration::from_millis(80));
     assert_eq!(
         input.update(true, t0 + Duration::from_millis(250)),

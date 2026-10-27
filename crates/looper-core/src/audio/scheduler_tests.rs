@@ -18,7 +18,10 @@ fn the_metronome_sounds_on_every_beat() {
             Event { offset: 0, step: 0 },
             Event { offset: 4, step: 1 },
             Event { offset: 8, step: 2 },
-            Event { offset: 12, step: 3 },
+            Event {
+                offset: 12,
+                step: 3
+            },
         ]
     );
 }
@@ -60,14 +63,20 @@ fn a_fractional_tempo_does_not_drift() {
     let found = offsets(&scheduler, start, 20);
     assert_eq!(found.len(), 1);
     let at = start + found[0] as u64;
-    assert!((at as f64 - exact).abs() <= 0.5, "beat 100 at {at}, exactly {exact}");
+    assert!(
+        (at as f64 - exact).abs() <= 0.5,
+        "beat 100 at {at}, exactly {exact}"
+    );
 }
 
 #[test]
 fn small_blocks_see_every_beat_that_one_big_block_does() {
     // The callback hands over whatever block size the driver uses.
     let scheduler = Scheduler::new(44_100, 137.0, Pattern::METRONOME);
-    let whole: Vec<u64> = scheduler.events(0, 200_000).map(|e| e.offset as u64).collect();
+    let whole: Vec<u64> = scheduler
+        .events(0, 200_000)
+        .map(|e| e.offset as u64)
+        .collect();
     let mut pieces = Vec::new();
     for block in 0..(200_000 / 64) {
         let start = block * 64;
@@ -133,4 +142,3 @@ fn a_voice_plays_at_its_gain() {
     voice.add_into(&[0.5, 1.0], &mut out, 0.5);
     assert_eq!(out, [0.25, 0.5]);
 }
-
