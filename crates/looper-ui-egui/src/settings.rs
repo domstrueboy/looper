@@ -32,13 +32,11 @@ pub fn render(
 
             // More settings than the window is tall, so the list
             // scrolls - with Start kept outside it, where it can't end
-            // up below the fold.
+            // up below the fold. Left-aligned: centred, the radio groups
+            // and their section labels wandered with each line's width.
             let can_start = egui::ScrollArea::vertical()
                 .max_height((ui.available_height() - START_ROW_HEIGHT).max(120.0))
-                .show(ui, |ui| {
-                    ui.vertical_centered(|ui| controls(ui, settings, backends))
-                        .inner
-                })
+                .show(ui, |ui| controls(ui, settings, backends))
                 .inner;
 
             if !can_start {
