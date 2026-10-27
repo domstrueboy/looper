@@ -21,6 +21,10 @@ pub const DEFAULT_PREROLL_MS: u32 = 4000;
 pub const DETECT_DB_RANGE: RangeInclusive<i32> = -60..=-10;
 pub const DEFAULT_DETECT_DB: i32 = -40;
 
+/// How long `StopMode::FadeOut` takes to bring the loop to silence.
+pub const FADE_MS_RANGE: RangeInclusive<u32> = 500..=10_000;
+pub const DEFAULT_FADE_MS: u32 = 3_000;
+
 /// Headroom between the input and output callbacks, to absorb timing
 /// jitter. The setting to raise when the log complains about underruns -
 /// at the cost of monitoring being that much less immediate.
@@ -133,6 +137,12 @@ pub struct AppConfig {
     /// See `DETECT_DB_RANGE`.
     #[serde(default = "default_detect_db")]
     pub detect_db: i32,
+    /// See `StopMode`.
+    #[serde(default)]
+    pub stop_mode: StopMode,
+    /// See `FADE_MS_RANGE`.
+    #[serde(default = "default_fade_ms")]
+    pub fade_ms: u32,
     /// See `LATENCY_MS_RANGE`.
     #[serde(default = "default_latency_ms")]
     pub latency_ms: u32,
@@ -175,6 +185,21 @@ pub enum RecordStart {
     Detect,
 }
 
+/// How a playing loop stops - by Stop, or a double press. Not the end of
+/// a first take, which stops at once whatever this says: the loop hasn't
+/// played yet, so there's nothing to play out or fade.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StopMode {
+    #[default]
+    Immediate,
+    /// Plays on to the end of the loop - the next time round starts at
+    /// the top, as the song would.
+    LoopEnd,
+    /// Brings the loop down to silence over `fade_ms`.
+    FadeOut,
+}
+
 /// What a config written before this field existed meant: those files
 /// all came from a build that could only open ASIO.
 fn default_backend() -> String {
@@ -211,6 +236,10 @@ fn default_metronome_bpm() -> u32 {
 
 fn default_detect_db() -> i32 {
     DEFAULT_DETECT_DB
+}
+
+fn default_fade_ms() -> u32 {
+    DEFAULT_FADE_MS
 }
 
 impl AppConfig {
@@ -265,6 +294,7 @@ impl AppConfig {
         self.volume_pct = clamp_to(self.volume_pct, VOLUME_PCT_RANGE);
         self.preroll_ms = clamp_to(self.preroll_ms, PREROLL_MS_RANGE);
         self.detect_db = clamp_to(self.detect_db, DETECT_DB_RANGE);
+        self.fade_ms = clamp_to(self.fade_ms, FADE_MS_RANGE);
         self.latency_ms = clamp_to(self.latency_ms, LATENCY_MS_RANGE);
         self.max_loop_secs = clamp_to(self.max_loop_secs, MAX_LOOP_SECS_RANGE);
         self.max_layers = clamp_to(self.max_layers, MAX_LAYERS_RANGE);
@@ -312,6 +342,8 @@ impl Default for AppConfig {
             record_start: RecordStart::Delay,
             preroll_ms: DEFAULT_PREROLL_MS,
             detect_db: DEFAULT_DETECT_DB,
+            stop_mode: StopMode::Immediate,
+            fade_ms: DEFAULT_FADE_MS,
             latency_ms: DEFAULT_LATENCY_MS,
             max_loop_secs: DEFAULT_MAX_LOOP_SECS,
             max_layers: DEFAULT_MAX_LAYERS,

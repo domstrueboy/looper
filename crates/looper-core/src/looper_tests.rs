@@ -1435,3 +1435,125 @@ fn holding_the_stop_button_clears_a_stopped_loop() {
     assert_eq!(looper.state(), LoopState::Idle);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// --- Stop mode --------------------------------------------------------------
+
+fn stopping(stop_mode: config::StopMode) -> AppConfig {
+    AppConfig {
+        stop_mode,
+        // The shortest fade there is: 22,050 frames.
+        fade_ms: 500,
+        ..rec_play(4)
+    }
+}
+
+#[test]
+fn a_stop_at_the_loop_end_plays_on_until_it() {
+    let (mut looper, driver, dir) = start("looper-stop-end", &stopping(config::StopMode::LoopEnd));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+
+    looper.stop();
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!(looper.state(), LoopState::Looping, "still going");
+    assert_eq!(looper.pending_stop(), Some(config::StopMode::LoopEnd));
+
+    feed(&mut looper, &driver, 8_000, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    assert_eq!(looper.pending_stop(), None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn stopping_again_while_it_plays_out_stops_now() {
+    let (mut looper, driver, dir) = start("looper-stop-now", &stopping(config::StopMode::LoopEnd));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+
+    looper.stop();
+    looper.stop();
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn space_while_it_plays_out_calls_the_stop_off_without_dubbing() {
+    let (mut looper, driver, dir) = start("looper-stop-off", &stopping(config::StopMode::LoopEnd));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+    looper.stop();
+
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 9_000, at);
+
+    assert_eq!(looper.state(), LoopState::Looping, "past the loop end, still playing");
+    assert_eq!(looper.layer_count(), 1, "no dub");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_dub_stopped_at_the_loop_end_is_kept_at_once() {
+    let (mut looper, driver, dir) = start("looper-stop-end-dub", &stopping(config::StopMode::LoopEnd));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 4_000, at);
+
+    looper.stop();
+    feed(&mut looper, &driver, 512, at);
+    assert_eq!(looper.state(), LoopState::Looping, "the dub closed, the loop playing out");
+    assert_eq!(looper.layer_count(), 2);
+
+    feed(&mut looper, &driver, 8_000, at);
+    assert_eq!(looper.state(), LoopState::Stopped);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_fade_out_stops_once_it_has_faded() {
+    let (mut looper, driver, dir) = start("looper-stop-fade", &stopping(config::StopMode::FadeOut));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+
+    looper.stop();
+    feed(&mut looper, &driver, 20_000, at);
+    assert_eq!(looper.pending_stop(), Some(config::StopMode::FadeOut));
+    feed(&mut looper, &driver, 4_000, at);
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn ending_the_first_take_with_stop_is_always_at_once() {
+    // The loop hasn't played yet: there's nothing to play out or fade.
+    let (mut looper, driver, dir) = start("looper-stop-take-end", &stopping(config::StopMode::FadeOut));
+    let mut at = Instant::now();
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 8_000, at);
+
+    looper.stop();
+
+    assert_eq!(looper.state(), LoopState::Stopped);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_loop_stopped_at_its_end_plays_again_on_a_press() {
+    let (mut looper, driver, dir) = start("looper-stop-end-replay", &stopping(config::StopMode::LoopEnd));
+    let mut at = Instant::now();
+    take(&mut looper, &driver, &mut at);
+    looper.stop();
+    feed(&mut looper, &driver, 8_512, at);
+    assert_eq!(looper.state(), LoopState::Stopped);
+
+    single(&mut looper, &mut at);
+    feed(&mut looper, &driver, 512, at);
+
+    assert_eq!(looper.state(), LoopState::Looping);
+    assert!(looper.loop_duration_and_progress().1 > 0.0, "moving, not held at the top");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+

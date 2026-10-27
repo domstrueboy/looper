@@ -1,7 +1,7 @@
 use looper_core::action::Action;
 use looper_core::config::{
-    DETECT_DB_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
-    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, VOLUME_PCT_RANGE,
+    DETECT_DB_RANGE, FADE_MS_RANGE, LATENCY_MS_RANGE, LONG_PRESS_MS_RANGE, MAX_LAYERS_RANGE, MAX_LOOP_SECS_RANGE,
+    METRONOME_BPM_RANGE, PREROLL_MS_RANGE, RecordMode, RecordStart, StopMode, VOLUME_PCT_RANGE,
 };
 use looper_core::settings::SettingsState;
 use looper_hal::Backends;
@@ -217,6 +217,24 @@ fn controls(ui: &mut egui::Ui, settings: &mut SettingsState, backends: &Backends
                     .suffix(" dB"),
             )
             .on_hover_text("Raise it if noise starts the recording on its own");
+        }
+    });
+    ui.label("Stop");
+    ui.indent("stop_mode", |ui| {
+        let config = &mut settings.config;
+        ui.radio_value(&mut config.stop_mode, StopMode::Immediate, "Immediately")
+            .on_hover_text("The loop goes silent the moment you stop it");
+        ui.radio_value(&mut config.stop_mode, StopMode::LoopEnd, "At the loop end")
+            .on_hover_text("The loop plays to its end first; stop again for now");
+        ui.radio_value(&mut config.stop_mode, StopMode::FadeOut, "Fade out")
+            .on_hover_text("The loop fades to silence; stop again for now");
+        if config.stop_mode == StopMode::FadeOut {
+            ui.add(
+                egui::Slider::new(&mut config.fade_ms, FADE_MS_RANGE)
+                    .step_by(500.0)
+                    .text("Fade time")
+                    .custom_formatter(|ms, _| format!("{:.1} s", ms / 1000.0)),
+            );
         }
     });
     ui.add(

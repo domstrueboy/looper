@@ -42,6 +42,7 @@ fn readout(looper: &LooperState) -> indicator::Readout {
         finishing_bar: looper.is_finishing_bar(),
         dubs_on: looper.dubs_on(),
         waiting_to_hear: looper.is_waiting_to_hear(),
+        stopping: looper.pending_stop(),
     }
 }
 
@@ -139,6 +140,8 @@ pub fn render(ui: &mut egui::Ui, looper: &mut LooperState) -> Option<Action> {
                         // button, latched the same way, not clicked.
                         let stop_label = if looper.is_stop_long_press_active() {
                             "🗑 Cleared"
+                        } else if looper.pending_stop().is_some() {
+                            "Stop now (S)"
                         } else {
                             "Stop (S)"
                         };

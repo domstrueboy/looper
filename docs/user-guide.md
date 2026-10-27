@@ -40,12 +40,18 @@ The first time you launch the app, you'll see a **Settings** screen:
      your first note so its attack isn't cut. **Start level** sets how
      loud that note has to be; raise it if noise starts the recording on
      its own.
-7. **Hold to undo / clear** - how long Space or S has to be held
+7. **Stop** - how a playing loop stops: **Immediately**, **At the loop
+   end** (it plays to the end first, so it starts from the top next
+   time), or **Fade out** over the **Fade time** you set. While it plays
+   out or fades, the screen says so and the button reads **Stop now** -
+   press S again to stop at once, or Space to change your mind and keep
+   playing. Ending your first recording with S always stops at once.
+8. **Hold to undo / clear** - how long Space or S has to be held
    down: Space undoes the last layer, S wipes the loop. Two seconds by
    default.
-8. **Latency** - how much headroom the audio engine keeps. Lower feels
+9. **Latency** - how much headroom the audio engine keeps. Lower feels
    more immediate; if the sound crackles or drops out, raise it.
-9. **Max loop length** and **Max layers** - the longest loop you can
+10. **Max loop length** and **Max layers** - the longest loop you can
    record and how many layers you can stack. Both are reserved in
    memory up front, so the line underneath tells you what your choices
    will cost - there's no reason to ask for more than you'll use.

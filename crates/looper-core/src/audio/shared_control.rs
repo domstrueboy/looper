@@ -1,5 +1,6 @@
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
+use crate::config::StopMode;
 use crate::state_machine::LoopState;
 
 /// Lock-free relay across the UI/audio thread boundary. The state machine
@@ -16,6 +17,15 @@ pub struct SharedControl {
     /// Ends the overdub in progress and opens the next one, with no state
     /// change to carry it: dubbing goes on, into a layer of its own.
     next_layer_requested: AtomicBool,
+    /// A stop the audio thread carries out itself, to the frame: 0 for
+    /// none, else a `StopMode`. A level, not a one-shot - it's acted on
+    /// every block it's set and the loop plays, and cleared (cancelled)
+    /// before any state leaving it is published.
+    pending_stop: AtomicU8,
+    /// Set by the audio thread when that stop has run its course: the
+    /// loop end reached, or the fade at silence. The UI thread publishes
+    /// Stopped on seeing it.
+    stop_done: AtomicBool,
     // Telemetry the other way, audio -> UI: duration, progress bar, and
     // how many layers are stacked up.
     loop_len: AtomicUsize,
@@ -59,6 +69,8 @@ impl SharedControl {
             redo_layer_requested: AtomicBool::new(false),
             abandon_take_requested: AtomicBool::new(false),
             next_layer_requested: AtomicBool::new(false),
+            pending_stop: AtomicU8::new(0),
+            stop_done: AtomicBool::new(false),
             loop_len: AtomicUsize::new(0),
             play_pos: AtomicUsize::new(0),
             layer_count: AtomicUsize::new(0),
@@ -116,6 +128,29 @@ impl SharedControl {
     /// overdubbing; the audio thread drops it otherwise.
     pub fn request_next_layer(&self) {
         self.next_layer_requested.store(true, Ordering::Release);
+    }
+
+    /// Asks the audio thread to stop the playing loop its own way. The
+    /// done flag is cleared first, so one left from an earlier stop
+    /// can't end this one at once.
+    pub fn request_stop(&self, mode: StopMode) {
+        self.stop_done.store(false, Ordering::Release);
+        let level = match mode {
+            StopMode::Immediate => 0,
+            StopMode::LoopEnd => 1,
+            StopMode::FadeOut => 2,
+        };
+        self.pending_stop.store(level, Ordering::Release);
+    }
+
+    /// Before publishing a state that leaves the stop behind - so the
+    /// audio thread, seeing that state, sees this too.
+    pub fn cancel_stop(&self) {
+        self.pending_stop.store(0, Ordering::Release);
+    }
+
+    pub fn take_stop_done(&self) -> bool {
+        self.stop_done.swap(false, Ordering::AcqRel)
     }
 
     pub fn layer_count(&self) -> usize {
@@ -177,6 +212,18 @@ impl SharedControl {
 
     pub(super) fn take_next_layer_request(&self) -> bool {
         self.next_layer_requested.swap(false, Ordering::AcqRel)
+    }
+
+    pub(super) fn pending_stop(&self) -> Option<StopMode> {
+        match self.pending_stop.load(Ordering::Acquire) {
+            1 => Some(StopMode::LoopEnd),
+            2 => Some(StopMode::FadeOut),
+            _ => None,
+        }
+    }
+
+    pub(super) fn note_stop_done(&self) {
+        self.stop_done.store(true, Ordering::Release);
     }
 
     pub(super) fn take_redo_layer_request(&self) -> bool {

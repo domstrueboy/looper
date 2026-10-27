@@ -16,7 +16,7 @@ use ringbuf::{
 use super::loop_stack::{LoopStack, OpenTake};
 use super::metronome::Metronome;
 use super::shared_control::SharedControl;
-use crate::config::{AppConfig, RecordMode, RecordStart};
+use crate::config::{AppConfig, RecordMode, RecordStart, StopMode};
 use crate::loop_mirror::{Capture, TakeEnd};
 use crate::state_machine::LoopState;
 
@@ -168,6 +168,13 @@ pub struct OutputPath {
     /// publishes Recording itself.
     record_start: RecordStart,
     detector: Detector,
+    /// `StopMode::FadeOut`'s length, and how far into it the loop is.
+    fade_frames: usize,
+    fade_done: usize,
+    /// A stop of the audio thread's own has run its course: silent, and
+    /// holding its place rather than playing on, until the UI thread's
+    /// Stopped arrives - or the stop is called off.
+    parked: bool,
     metronome: Metronome,
     /// The callback only ever sees the published state, never the
     /// transitions, so layer bookkeeping keys off this changing - see
@@ -242,6 +249,8 @@ impl OutputPath {
                 if state == LoopState::Arming {
                     self.detector.reset();
                 }
+                self.parked = false;
+                self.fade_done = 0;
                 self.previous_state = state;
             }
 
@@ -337,8 +346,42 @@ impl OutputPath {
                             done = end;
                         }
                     } else {
-                        self.stack
-                            .read_mixed(&mut self.loop_out[..frames], self.control.volume_pct());
+                        let gain = self.control.volume_pct();
+                        let loop_out = &mut self.loop_out[..frames];
+                        let pending = self.control.pending_stop();
+                        if pending.is_none() {
+                            self.parked = false;
+                            self.fade_done = 0;
+                        }
+                        match pending {
+                            _ if self.parked => loop_out.fill(0.0),
+                            // Up to the top and no further: the next play
+                            // starts there.
+                            Some(StopMode::LoopEnd) => {
+                                let to_end = self.stack.frames_to_loop_end();
+                                if to_end <= frames {
+                                    self.stack.read_mixed(&mut loop_out[..to_end], gain);
+                                    loop_out[to_end..].fill(0.0);
+                                    self.parked = true;
+                                    self.control.note_stop_done();
+                                } else {
+                                    self.stack.read_mixed(loop_out, gain);
+                                }
+                            }
+                            Some(StopMode::FadeOut) => {
+                                self.stack.read_mixed(loop_out, gain);
+                                let total = self.fade_frames as f32;
+                                for sample in loop_out.iter_mut() {
+                                    *sample *= (total - self.fade_done as f32).max(0.0) / total;
+                                    self.fade_done += 1;
+                                }
+                                if self.fade_done >= self.fade_frames {
+                                    self.parked = true;
+                                    self.control.note_stop_done();
+                                }
+                            }
+                            Some(StopMode::Immediate) | None => self.stack.read_mixed(loop_out, gain),
+                        }
                     }
                     mix_add(dry, &self.loop_out[..frames]);
                 }
@@ -351,7 +394,9 @@ impl OutputPath {
             // silence would count nobody in.
             let counting_in =
                 state == LoopState::Arming && self.record_start == RecordStart::CountIn;
-            if self.control.metronome_on() || counting_in {
+            // Not while parked: the loop holds its place, and the click
+            // would sound beat one there every block.
+            if (self.control.metronome_on() || counting_in) && !self.parked {
                 if matches!(state, LoopState::Looping | LoopState::Overdubbing) {
                     self.metronome
                         .add_on_loop(dry, loop_pos, self.stack.recorded_len());
@@ -569,6 +614,9 @@ pub fn build_audio_path(
             stack,
             layer_per_pass: settings.record_mode == RecordMode::RecDubPerPass,
             record_start: settings.record_start,
+            fade_frames: (sample_rate as usize * settings.fade_ms as usize / 1_000).max(1),
+            fade_done: 0,
+            parked: false,
             detector: Detector::new(
                 10f32.powf(settings.detect_db as f32 / 20.0),
                 (sample_rate as usize * DETECT_LOOKBACK_MS / 1_000).max(1),

@@ -22,10 +22,11 @@ surviving restarts as WAV layers, an app icon, no console window in
 release builds, technical + user docs, and a Windows CI build/release
 pipeline.
 
-**v2 is under way** - steps 0-6 done: the mini/extended switch, layer
+**v2 is under way** - steps 0-7 done: the mini/extended switch, layer
 mute, redo, the metronome with live tempo, loops snapped to bars, a
-one-bar count-in that opens the take on the bar line, and a tempo for
-every loop, saved with it. Next is step 7.
+tempo for every loop, saved with it, and the pedal feel - two pedals
+(Space never stops, S always does), three record modes, hold to undo,
+and record start and stop modes. Next is step 8.
 
 Since v1 the app has been split into four crates - `looper-hal`
 (devices), `looper-core` (the pedal), `looper-ui-egui` (the screens) and
@@ -354,7 +355,7 @@ How the main control behaves, as settings rather than one fixed way.
   play at once. Replaces the implicit "metronome on means count-in": a
   count-in is right at home and wrong on stage. Detect can't start a
   part on an off-beat, which is why it's a choice, not the default.
-- **7d. Stop mode.** *Immediate* (today's), *At the loop end*, or *Fade
+- **7d. Stop mode - done.** *Immediate* (today's), *At the loop end*, or *Fade
   out* over a few seconds. Fades scale the loop bus on the audio thread;
   the loop end is known to the frame. Applies to every stop: the single
   press, the double, and the Stop control.

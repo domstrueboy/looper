@@ -10,7 +10,9 @@ use crate::audio::fault::StreamFault;
 use crate::audio::scheduler::{Pattern, Scheduler};
 use crate::audio::shared_control::SharedControl;
 use crate::state_machine::{LoopState, LoopStateMachine};
-use crate::config::{self, AppConfig, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart};
+use crate::config::{
+    self, AppConfig, METRONOME_BPM_RANGE, Mode, RecordMode, RecordStart, StopMode,
+};
 use crate::input::{InputEvent, InputHandler};
 use crate::loop_mirror::{self, LoopMirror};
 use crate::preroll::Preroll;
@@ -62,6 +64,9 @@ pub struct LooperState {
     /// count-in's bar line, or at the first note heard. Only for showing
     /// it: this side follows once the take is seen growing.
     audio_start: Option<AudioStart>,
+    /// A stop the audio thread is carrying out - playing on to the loop
+    /// end, or fading. The state says Looping until it reports done.
+    stop_pending: bool,
     /// The state the last single press acted from. A double press is two
     /// presses with the first already acted on, so it needs to know what
     /// that first one changed to take it back.
@@ -173,6 +178,7 @@ impl LooperState {
             preroll: Preroll::new(Duration::from_millis(u64::from(settings.preroll_ms))),
             stop_at: None,
             audio_start: None,
+            stop_pending: false,
             pressed_from: None,
             loop_tempo: None,
             // A saved loop has a length but no tempo yet; guessed once
@@ -271,6 +277,8 @@ impl LooperState {
     /// on the first. A take or a dub ends and is kept, a count-in is
     /// called off. In REC→DUB, where the main control never leaves
     /// dubbing, it steps down: dubbing to playing, playing to stopped.
+    /// A playing loop stops the `StopMode` way; stopping it again while
+    /// that runs means now.
     pub fn stop(&mut self) {
         match self.state() {
             LoopState::Idle | LoopState::Stopped => return,
@@ -289,9 +297,36 @@ impl LooperState {
             LoopState::Overdubbing if self.config.record_mode == RecordMode::RecDub => {
                 self.state_machine.toggle_overdub();
             }
-            LoopState::Looping | LoopState::Overdubbing => self.state_machine.press(),
+            LoopState::Looping | LoopState::Overdubbing
+                if self.config.stop_mode == StopMode::Immediate || self.stop_pending =>
+            {
+                self.stop_pending = false;
+                self.state_machine.press();
+            }
+            // The dub is kept now; the loop plays on without it growing.
+            LoopState::Looping | LoopState::Overdubbing => {
+                if self.state() == LoopState::Overdubbing {
+                    self.state_machine.toggle_overdub();
+                }
+                self.stop_pending = true;
+                self.control.request_stop(self.config.stop_mode);
+            }
         }
         self.control.publish_state(self.state_machine.state());
+    }
+
+    /// Playing on to the loop end or fading, on the way to Stopped.
+    pub fn pending_stop(&self) -> Option<StopMode> {
+        self.stop_pending.then_some(self.config.stop_mode)
+    }
+
+    /// Calls off a stop under way - before whatever state comes next is
+    /// published, so the audio thread can't play on past where it held.
+    /// Stopped included: the request stays set there, harmlessly, until
+    /// this.
+    fn cancel_stop(&mut self) {
+        self.stop_pending = false;
+        self.control.cancel_stop();
     }
 
     pub fn is_metronome_on(&self) -> bool {
@@ -571,6 +606,12 @@ impl LooperState {
             InputEvent::None => {}
         }
 
+        if self.stop_pending && self.control.take_stop_done() {
+            self.stop_pending = false;
+            self.state_machine.press();
+            self.control.publish_state(self.state_machine.state());
+        }
+
         // Deliberately after the input: if a press meant to call the
         // pre-roll off lands on the same frame the countdown runs out,
         // the press should win.
@@ -671,6 +712,15 @@ impl LooperState {
     /// then walks on through the record mode's cycle; stopped, it plays.
     fn press(&mut self, now: Instant) {
         self.pressed_from = Some(self.state());
+        // Space while a stop plays out changes your mind: the loop goes
+        // on, and that's all - no dub opened by the same press.
+        if self.stop_pending {
+            self.cancel_stop();
+            return;
+        }
+        // A stop that ran its course leaves its request set; cleared
+        // before playing again, or the loop would park straight away.
+        self.control.cancel_stop();
         // A second press while waiting for the bar line means now: the
         // take is still rounded, the rest plays silent.
         if self.state() == LoopState::Recording && self.stop_at.is_none() {
@@ -827,6 +877,7 @@ impl LooperState {
     }
 
     fn clear(&mut self) {
+        self.cancel_stop();
         self.undo_pending = false;
         self.stop_at = None;
         self.audio_start = None;

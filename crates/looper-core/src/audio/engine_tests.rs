@@ -1,4 +1,5 @@
 use super::*;
+use crate::config::StopMode;
 
 #[test]
 fn mix_add_sums_dry_and_loop_signal() {
@@ -674,5 +675,87 @@ fn a_note_deep_in_a_block_takes_its_look_back_from_the_block() {
     let mut expected = quiet(11, 10);
     expected.push(0.5);
     assert_eq!(first[..], expected[..]);
+}
+
+// --- Stop mode --------------------------------------------------------------
+
+/// A loop of `LOOP_LEN` playing loud enough to hear, two blocks in.
+fn playing(settings: AppConfig) -> (Arc<SharedControl>, AudioPath) {
+    let settings = AppConfig {
+        volume_pct: 100,
+        ..settings
+    };
+    let control = Arc::new(SharedControl::new(settings.volume_pct, settings.metronome_bpm));
+    let (mut path, _captured) = build_audio_path(&control, &settings, TEST_RATE, 1, 1, &[]);
+    let mut next = 1.0;
+    control.publish_state(LoopState::Recording);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &ramp(&mut next));
+    }
+    control.publish_state(LoopState::Looping);
+    for _ in 0..2 {
+        drive(&mut path, &[0.0; BLOCK]);
+    }
+    (control, path)
+}
+
+#[test]
+fn a_stop_at_the_loop_end_plays_to_the_top_and_holds_there() {
+    let (control, mut path) = playing(test_settings());
+    control.request_stop(StopMode::LoopEnd);
+
+    for _ in 0..CYCLES_PER_LOOP - 3 {
+        drive(&mut path, &[0.0; BLOCK]);
+    }
+    assert!(!control.take_stop_done(), "a block short of the end");
+    drive(&mut path, &[0.0; BLOCK]);
+    assert!(control.take_stop_done(), "the end");
+
+    let out = drive(&mut path, &[0.0; BLOCK]);
+    assert!(out.iter().all(|&s| s == 0.0), "silent");
+    assert_eq!(path.output.stack.play_pos(), 0, "held at the top for the next play");
+}
+
+#[test]
+fn a_fade_out_takes_its_length_then_holds() {
+    // 16 ms at 1 kHz: four blocks, each sample a sixteenth quieter than
+    // the same loop left playing.
+    let settings = AppConfig {
+        fade_ms: 16,
+        ..test_settings()
+    };
+    let (control, mut path) = playing(settings.clone());
+    let (_, mut unfaded) = playing(settings);
+    control.request_stop(StopMode::FadeOut);
+
+    let mut gains = Vec::new();
+    for block in 0..4 {
+        assert!(!control.take_stop_done(), "block {block}");
+        let faded = drive(&mut path, &[0.0; BLOCK]);
+        let full = drive(&mut unfaded, &[0.0; BLOCK]);
+        gains.extend(faded.iter().zip(&full).map(|(f, u)| f / u));
+    }
+    assert!(control.take_stop_done());
+    let expected: Vec<f32> = (0..16).map(|i| (16 - i) as f32 / 16.0).collect();
+    assert_eq!(gains, expected);
+
+    let held = path.output.stack.play_pos();
+    let out = drive(&mut path, &[0.0; BLOCK]);
+    assert!(out.iter().all(|&s| s == 0.0));
+    assert_eq!(path.output.stack.play_pos(), held);
+}
+
+#[test]
+fn a_called_off_stop_plays_on_from_where_it_held() {
+    let (control, mut path) = playing(test_settings());
+    control.request_stop(StopMode::LoopEnd);
+    for _ in 0..CYCLES_PER_LOOP {
+        drive(&mut path, &[0.0; BLOCK]);
+    }
+
+    control.cancel_stop();
+    drive(&mut path, &[0.0; BLOCK]);
+
+    assert_eq!(path.output.stack.play_pos(), BLOCK, "moving again, from the top");
 }
 

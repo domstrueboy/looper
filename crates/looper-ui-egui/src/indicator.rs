@@ -1,3 +1,4 @@
+use looper_core::config::StopMode;
 use looper_core::state_machine::LoopState;
 
 /// Everything the looper screen displays about the current state,
@@ -21,6 +22,8 @@ pub struct Readout {
     pub dubs_on: bool,
     /// Armed and listening for the first note, with no countdown.
     pub waiting_to_hear: bool,
+    /// Playing on to a stop the audio thread is carrying out.
+    pub stopping: Option<StopMode>,
 }
 
 /// Label for the main button: what a short press does next, or what the
@@ -59,6 +62,13 @@ pub fn state_indicator(ui: &mut egui::Ui, readout: &Readout) {
             (egui::Color32::RED, "Recording to the bar line")
         }
         LoopState::Recording => (egui::Color32::RED, "Recording"),
+        // Says why Stop hasn't stopped it yet.
+        LoopState::Looping if readout.stopping == Some(StopMode::LoopEnd) => {
+            (egui::Color32::from_rgb(40, 200, 40), "Stopping at the loop end")
+        }
+        LoopState::Looping if readout.stopping == Some(StopMode::FadeOut) => {
+            (egui::Color32::from_rgb(40, 200, 40), "Fading out")
+        }
         LoopState::Looping => (egui::Color32::from_rgb(40, 200, 40), "Looping"),
         LoopState::Overdubbing => (egui::Color32::from_rgb(255, 110, 40), "Overdubbing"),
         LoopState::Stopped => (egui::Color32::from_rgb(230, 170, 30), "Stopped"),

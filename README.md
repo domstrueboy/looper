@@ -333,6 +333,20 @@ undo itself waits in `undo_pending` until the abandoned dub is seen
 dropped - `take_in_flight`, as for the Undo button - so the stack and the
 copy agree on which layer is last. Never the first take.
 
+**Stop mode.** `stop_mode` makes Stop (and the double press) play out
+to the loop end or fade, rather than cut. The audio thread carries it
+out, to the frame: `request_stop` sets a *level* in `SharedControl`, not
+a one-shot, which the callback acts on every block the loop plays -
+reading up to the top, or scaling by the fade - then *parks*: silent,
+`play_pos` held, `stop_done` set. The UI thread publishes `Stopped` on
+seeing that, so the state says Looping until the audio is actually
+quiet, and the screen says why. A loop held at its end starts again from
+the top. The request stays set while Stopped and is cleared before any
+state leaving it is published (`cancel_stop`), so the callback can't
+read the new state with the old request and play a block past where it
+held. Stop again while it runs means now; Space calls it off and only
+that. Ending a first take is always immediate - nothing has played yet.
+
 A **double press** - two within 400 ms (`input.rs`) - does what Stop
 does, for one key or pedal. Since a press acts as it goes down, the first
 half has already happened by the time the second arrives, so the double
@@ -581,6 +595,8 @@ window opened.
 | `record_start` | `"delay"` | `"instant"`, `"delay"`, `"count_in"`, `"detect"` | how a first take opens - see "Record start" |
 | `preroll_ms` | 4000 | 0-5000 | the wait, with `delay`; 0 = none |
 | `detect_db` | -40 | -60 to -10 | the level that opens a take, with `detect` |
+| `stop_mode` | `"immediate"` | `"immediate"`, `"loop_end"`, `"fade_out"` | how a playing loop stops - see "Stop mode" |
+| `fade_ms` | 3000 | 500-10000 | the fade, with `fade_out` |
 | `long_press_ms` | 2000 | 500-4000 | how long a hold is: Space to undo, S to clear |
 | `metronome_bpm` | 120 | 40-300 | metronome tempo |
 | `record_mode` | `"rec_play"` | `"rec_play"`, `"rec_dub"`, `"rec_dub_per_pass"` | see "State machine"; the older `after_take = "play"/"dub"` still reads |

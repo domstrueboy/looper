@@ -127,6 +127,12 @@ impl LoopStack {
         self.play_pos
     }
 
+    /// Frames until playback wraps to the top: where a stop at the loop
+    /// end lands. 0 while empty.
+    pub fn frames_to_loop_end(&self) -> usize {
+        self.loop_len - self.play_pos
+    }
+
     /// Whether a take is open - including a first take a count-in opened
     /// before the state said Recording.
     pub fn is_recording(&self) -> bool {
