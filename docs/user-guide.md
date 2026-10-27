@@ -94,6 +94,13 @@ they're fully interchangeable. It never stops the loop; that's **Stop**.
 A hold is two seconds by default (**Hold to undo / clear** in Settings);
 the hint line under the buttons says how long yours is set to.
 
+**A foot pedal works too.** A cheap USB foot pedal or presentation
+clicker with two switches usually sends **PageDown** and **PageUp** -
+the app takes those as Space and S, with no setup: the first switch is
+the main control, the second is Stop, and holding or double-pressing
+them works the same. A pedal that can be set to send any key: set it
+to Space and S.
+
 The round button shows what a press does next: ⏺ records or dubs, ▶
 plays, ⏹ ends the take.
 

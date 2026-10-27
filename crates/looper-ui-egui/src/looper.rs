@@ -18,6 +18,14 @@ const TAP_BUTTON_SIZE: [f32; 2] = [52.0, 24.0];
 /// Leaves room beside the track for the label and the value.
 const LEVEL_SLIDER_WIDTH: f32 = 150.0;
 
+/// The main pedal's keys: Space, and PageDown - what fixed-key foot
+/// pedals and presentation clickers send for their first switch, so a
+/// cheap pedal works with no setup.
+const MAIN_PEDAL_KEYS: [egui::Key; 2] = [egui::Key::Space, egui::Key::PageDown];
+
+/// The stop pedal's: S, and PageUp for the second switch.
+const STOP_PEDAL_KEYS: [egui::Key; 2] = [egui::Key::S, egui::Key::PageUp];
+
 /// Square, so up to eight fit across the window in one row.
 const LAYER_BUTTON_SIZE: [f32; 2] = [28.0, 24.0];
 
@@ -51,6 +59,17 @@ fn readout(looper: &LooperState) -> indicator::Readout {
     }
 }
 
+/// Whether each pedal is down right now, `(main, stop)` - read by the
+/// shell before it ticks the looper, which times the presses, doubles
+/// and holds. Held state rather than presses, so a pedal's key held down
+/// is a hold, whichever key it sends.
+pub fn pedals_held(ctx: &egui::Context) -> (bool, bool) {
+    ctx.input(|i| {
+        let held = |keys: &[egui::Key]| keys.iter().any(|&key| i.key_down(key));
+        (held(&MAIN_PEDAL_KEYS), held(&STOP_PEDAL_KEYS))
+    })
+}
+
 /// Reads the looper and says what was asked of it - a leaf: nothing here
 /// changes it. The shell applies the actions after the frame is drawn.
 pub fn render(ui: &mut egui::Ui, looper: &LooperState) -> Vec<Action> {
@@ -58,8 +77,8 @@ pub fn render(ui: &mut egui::Ui, looper: &LooperState) -> Vec<Action> {
     let (redo_pressed, metronome_pressed) = ui.ctx().input(|i| {
         (
             // Edge-triggered, unlike the two pedals: neither has a
-            // long-press meaning, so there's nothing to time. Space and S
-            // are read where the looper is ticked, in `main.rs`.
+            // long-press meaning, so there's nothing to time. The pedals
+            // are `pedals_held`, read before the looper is ticked.
             i.key_pressed(egui::Key::R),
             i.key_pressed(egui::Key::M),
         )

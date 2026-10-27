@@ -28,11 +28,9 @@ impl eframe::App for App {
                 // and every widget reads the same state: the button used
                 // to show what the indicator below it had already moved
                 // past, for one frame, whenever a pre-roll ran out.
-                let (space_down, s_down) = ui
-                    .ctx()
-                    .input(|i| (i.key_down(egui::Key::Space), i.key_down(egui::Key::S)));
-                looper.set_stop_key_held(s_down);
-                looper.tick(space_down, Instant::now());
+                let (main_down, stop_down) = looper_ui_egui::looper::pedals_held(ui.ctx());
+                looper.set_stop_key_held(stop_down);
+                looper.tick(main_down, Instant::now());
                 let actions = looper_ui_egui::looper::render(ui, looper);
                 fit_height_to_content(ui);
                 actions

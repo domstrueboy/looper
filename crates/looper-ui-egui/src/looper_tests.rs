@@ -350,3 +350,25 @@ fn extended_mutes_a_layer_by_button_or_number_key() {
     let looper = &rig.harness.state().looper;
     assert!(looper.is_layer_muted(0) && looper.is_layer_muted(1));
 }
+
+#[test]
+fn page_down_and_page_up_are_the_two_pedals() {
+    // What fixed-key foot pedals send, read as Space and S are.
+    let mut harness = Harness::new_ui_state(
+        |ui, held: &mut (bool, bool)| *held = pedals_held(ui.ctx()),
+        (false, false),
+    );
+    for (key, expected) in [
+        (egui::Key::Space, (true, false)),
+        (egui::Key::PageDown, (true, false)),
+        (egui::Key::S, (false, true)),
+        (egui::Key::PageUp, (false, true)),
+    ] {
+        harness.key_down(key);
+        harness.run();
+        assert_eq!(*harness.state(), expected, "{key:?} down");
+        harness.key_up(key);
+        harness.run();
+        assert_eq!(*harness.state(), (false, false), "{key:?} up");
+    }
+}

@@ -329,6 +329,13 @@ The two-pedal layout most loopers share (Boss RC-30, Ditto X2, the NUX
 Dual Loop with its CTRL switch): a main control that never stops, and a
 stop.
 
+The main control is Space, the round button, or **PageDown**; stop is
+S, its button, or **PageUp** - those two are what fixed-key USB foot
+pedals and presentation clickers send, so one works with no setup. The
+looper screen's `pedals_held` reads all of them as held keys, and
+`tick` times them, so a pedal's hold and double press are the
+keyboard's.
+
 | From | Press | Stop (`S`) |
 |---|---|---|
 | **Idle** | **Recording** (or **Arming**, below) | - |

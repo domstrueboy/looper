@@ -178,7 +178,7 @@ types keys.
 |---|---|---|---|
 | F1 | Open Notepad and press each switch | Note in *Carry forward* what each one types - often PageDown and PageUp, sometimes arrows, B or Space | |
 | F2 | Hold a switch down in Notepad for three seconds | Note whether the key repeats while held, or arrives once - a pedal that sends down and up together can't hold, so hold-to-undo won't work from it | |
-| F3 | If the pedal can be set to Space and S: do, and play a loop from it | Press, double press and hold all work from your foot as they do from the keyboard | |
+| F3 | If it sends PageDown and PageUp - or can be set to Space and S - play a loop from it | The first switch is the main control, the second Stop; press, double press and hold all work from your foot as they do from the keyboard | |
 
 ## 12. A laptop with no ASIO
 

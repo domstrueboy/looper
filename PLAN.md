@@ -224,11 +224,12 @@ warning from that.
   open-source projects (check its current terms when applying).
   SmartScreen's "unknown publisher" scares people off more than it
   seems to.
-- **Pedal keys:** **PageDown** works as Space and **PageUp** as S, the
-  keys fixed-key foot pedals and presentation clickers send, so a cheap
-  pedal works with no setup. Held and double-pressed like the keys
-  they stand for. Widened to whatever else step 10's pedal turned out
-  to send.
+- **11b. Pedal keys - done.** **PageDown** works as Space and
+  **PageUp** as S, the keys fixed-key foot pedals and presentation
+  clickers send, so a cheap pedal works with no setup - held and
+  double-pressed like the keys they stand for, through one
+  `pedals_held` in the looper screen. Still to widen to whatever else
+  10e's pedal (F1) turns out to send.
 - **Bluetooth warning** in Settings when an output looks like Bluetooth,
   and in the docs - wired headphones or the interface's own output.
 - **11a. CI - done.** A release only when the version drops `-dev`,
