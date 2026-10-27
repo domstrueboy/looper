@@ -155,19 +155,18 @@ two equal device ids do not mean one duplex device.
 
 Worth settling before the work they block starts.
 
-- **License, the ASIO SDK, and signing - one decision, before step 11.**
-  CI builds against the GPLv3 fallback ASIO SDK, and depending on how
-  `asio-sys` links its compiled shim, that can carry GPL obligations
-  onto a distributed exe. Irrelevant for building it yourself; decisive
-  for a public release. It ties to the signing route too: an
-  open-source project can sign for free (SignPath Foundation); a closed
-  one pays (a code-signing certificate, or Azure Trusted Signing). Pick
-  the license first, then the other two follow.
-- **Which keys a cheap USB pedal sends.** Many are programmable; some
-  are fixed to PageDown / PageUp (presentation-clicker style) or to
-  letters. Find out from two or three common models whether Space and S
-  are reachable, or whether those keys should also be accepted as
-  aliases. Before step 11, since the release text will promise it.
+- **Open source - decided; which license is still open.** It settles
+  the other two questions: CI builds against the ASIO SDK's GPLv3
+  option, which an open-source release can meet - the source is public
+  anyway, and the released exe goes out under GPLv3's terms - and an
+  open-source project can sign for free (SignPath Foundation). The
+  source's own license is the choice left: GPL-3.0 keeps every fork open
+  too; MIT keeps the most options for a paid tier later, since nothing
+  but the author's own code would need relicensing. Either way a
+  `LICENSE` file, the `license` field in `Cargo.toml`, and a line in the
+  README, in step 11. Moving to closed source later would mean
+  Steinberg's proprietary ASIO SDK licence (free, but signed for) in
+  place of the GPLv3 one.
 - **The order after the release** (steps 12-16) is a proposal: tuner
   first because it's small and keeps people from giving up, sessions
   before drums because a backing track you can come back to is the
@@ -206,16 +205,24 @@ screens, every setting, each record mode, record start and stop mode
 through its full cycle, and what should survive a restart. Plus what only
 hardware shows, owed since the post-v1 review: the by-ear pass (click
 against loop, overdubs in time, no click at the loop seam, a smooth
-fade), an unplugged interface mid-loop, WASAPI on a laptop with no ASIO
+fade), an unplugged interface mid-loop, a USB foot pedal (which keys it
+sends - step 11 makes those work), WASAPI
+on a laptop with no ASIO
 driver, and Bluetooth headphones - to see how bad it is and word the
 warning from that.
 
 ### 11. Release 0.2
 
-- **Settle the open decisions** above: license + ASIO SDK + signing, and
-  the pedal keys.
-- **Signed exe.** SmartScreen's "unknown publisher" scares people off
-  more than it seems to.
+- **License:** the `LICENSE` file and fields - see *Open decisions*.
+- **Signed exe,** through SignPath Foundation's free signing for
+  open-source projects (check its current terms when applying).
+  SmartScreen's "unknown publisher" scares people off more than it
+  seems to.
+- **Pedal keys:** **PageDown** works as Space and **PageUp** as S, the
+  keys fixed-key foot pedals and presentation clickers send, so a cheap
+  pedal works with no setup. Held and double-pressed like the keys
+  they stand for. Widened to whatever else step 10's pedal turned out
+  to send.
 - **Bluetooth warning** in Settings when an output looks like Bluetooth,
   and in the docs - wired headphones or the interface's own output.
 - **CI actually verified:** the existing release workflow's zips have
